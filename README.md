@@ -54,6 +54,27 @@ string never needs to go on a command line or into shell history. `db:check`
 does all of its work inside a transaction it rolls back, so it is safe to run
 against a database that has real bookings in it.
 
+## Domains
+
+Two domains, both ours, doing different jobs. This split is deliberate — do
+not "fix" one to match the other.
+
+| Domain | Job | Where it points |
+|---|---|---|
+| `homewickcleaning.com` | Email only | Google Workspace (`smtp.google.com` MX) |
+| `homewickcleaning.net` | The website | Vercel |
+
+So the contact address is `info@homewickcleaning.com` while the site is served
+from `www.homewickcleaning.net`. The `.net` carries no MX records and the
+`.com` carries no website, so changing DNS on one cannot break the other —
+worth knowing before touching either.
+
+DNS for the `.net` is managed at GoDaddy. Vercel needs an `A` record on the
+apex and a `CNAME` on `www`; the exact values are shown in the Vercel project
+under Settings → Domains. If GoDaddy's domain forwarding or parking is left
+switched on it will keep reinstating its own `A` records and the domain will
+sit at "Invalid Configuration" no matter how many times the records are fixed.
+
 ## The connection string
 
 Use the **pooled** string, under Project Settings → Database → Connection
@@ -163,17 +184,7 @@ before 8am or after 9pm local. TCPA penalties are per message.
 
 These are unresolved and must not be guessed at in code.
 
-- **Email address.** The domain question is settled — it is
-  `homewickcleaning.net`. The `.com` belongs to someone else: it serves a live
-  site on Squarespace and has Google Workspace MX records, so mail sent to
-  `info@homewickcleaning.com` reaches a stranger. Anywhere that address still
-  appears offline — business cards, invoices, the Wix site — is sending
-  enquiries to the wrong company.
-
-  What remains is mail hosting. `homewickcleaning.net` has no MX records
-  today, so `info@homewickcleaning.net` would bounce.
-  `NEXT_PUBLIC_CONTACT_EMAIL` stays unset until mail is actually delivered,
-  and the footer omits contact details while it is.
+*(The email-domain question is now settled — see Domains below.)*
 - **Employee vs contractor classification** for cleaners.
 - **House pricing tier** — current pricing is apartments only.
 - **A one-clean-per-month membership tier.**
