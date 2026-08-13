@@ -92,6 +92,37 @@ test("second visit is pulled back rather than spilling into the next period", ()
   }
 });
 
+test("no visit is scheduled before the notBefore date", () => {
+  // A member signing up on the 13th must not be sent a cleaner on the 13th.
+  const period = { start: "2026-08-13", end: "2026-09-13" };
+  const dates = visitDatesForPeriod(period, 4, 2, "2026-08-21");
+
+  assert.ok(dates.length > 0);
+  for (const d of dates) {
+    assert.ok(d >= "2026-08-21", `${d} was scheduled before the earliest allowed date`);
+    assert.ok(d < period.end, `${d} escaped its period`);
+  }
+});
+
+test("regular cleanings fall after the onboarding deep clean", () => {
+  // Signup 2026-08-13 (a Thursday), preferred weekday Thursday.
+  const deepClean = "2026-08-20"; // first Thursday at least MIN_LEAD_DAYS out
+  const period = { start: "2026-08-13", end: "2026-09-13" };
+  const dates = visitDatesForPeriod(period, 4, 2, addDays(deepClean, 1));
+
+  for (const d of dates) {
+    assert.ok(d > deepClean, `standard clean ${d} lands before the deep clean`);
+  }
+});
+
+test("notBefore does not push a visit past the period end", () => {
+  const period = { start: "2026-08-13", end: "2026-09-13" };
+  const dates = visitDatesForPeriod(period, 4, 2, "2026-09-10");
+  for (const d of dates) {
+    assert.ok(d < period.end, `${d} escaped its period`);
+  }
+});
+
 test("no preferred weekday falls back to the period start", () => {
   const dates = visitDatesForPeriod({ start: "2026-01-15", end: "2026-02-15" }, null, 2);
   assert.equal(dates[0], "2026-01-15");

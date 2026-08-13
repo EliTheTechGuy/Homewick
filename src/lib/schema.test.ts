@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { decryptSecret, encryptSecret } from "./secrets";
 import { beforeAll, afterAll, test } from "vitest";
@@ -9,7 +9,7 @@ import { citext } from "@electric-sql/pglite/contrib/citext";
 import { generateForSubscription, type SubscriptionRow } from "./membership-lifecycle";
 
 /**
- * Runs db/schema.sql against a real Postgres (PGlite, in-process) and then
+ * Runs the migration sequence against a real Postgres (PGlite, in-process) and then
  * drives the visit generator against it. The generator's SQL is otherwise
  * never executed until it runs against production data, which is too late to
  * discover a typo in a column name.
@@ -27,14 +27,20 @@ function asClient(pglite: PGlite): ClientLike {
 
 beforeAll(async () => {
   db = new PGlite({ extensions: { citext } });
-  const path = fileURLToPath(new URL("../../db/schema.sql", import.meta.url));
-  const sql = await readFile(path, "utf8");
 
-  // PGlite has no pgcrypto build. The schema only wants it for
-  // gen_random_uuid(), which has been core Postgres since 13, so dropping the
-  // extension line here changes nothing we are testing. Supabase and Neon
-  // both ship pgcrypto, so the real schema keeps it.
-  await db.exec(sql.replace(/create extension if not exists "pgcrypto";\n/, ""));
+  // Runs the real migration sequence, in the real order, so this test covers
+  // whatever `npm run db:migrate` would do to a fresh database.
+  const dir = fileURLToPath(new URL("../../db/migrations/", import.meta.url));
+  const files = (await readdir(dir)).filter((f) => f.endsWith(".sql")).sort();
+  assert.ok(files.length > 0, "no migrations found");
+
+  for (const file of files) {
+    const sql = await readFile(dir + file, "utf8");
+    // PGlite has no pgcrypto build. It is only wanted for gen_random_uuid(),
+    // which has been core Postgres since 13, so dropping the extension line
+    // changes nothing being tested here. Supabase and Neon both ship it.
+    await db.exec(sql.replace(/create extension if not exists "pgcrypto";\n/, ""));
+  }
 }, 60_000);
 
 afterAll(async () => {

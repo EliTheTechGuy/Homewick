@@ -52,7 +52,7 @@ export default async function AdminTodayPage({
   }
 
   if (!isDatabaseConfigured()) {
-    return <Notice title="No database">Set DATABASE_URL and run db/schema.sql.</Notice>;
+    return <Notice title="No database">Set DATABASE_URL and run npm run db:migrate.</Notice>;
   }
 
   const { date } = await searchParams;

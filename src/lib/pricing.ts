@@ -1,5 +1,5 @@
 /**
- * Launch pricing catalog. Mirrors the seed rows in db/schema.sql.
+ * Launch pricing catalog. Mirrors the seed rows in db/migrations/0001_initial_schema.sql.
  *
  * These values drive display and quoting. They are deliberately NOT the source
  * of truth for an existing member's rate — a subscription's rate is snapshotted
