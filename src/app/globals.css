@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@theme {
+  --color-accent: #1f5fa6;
+  --color-accent-dark: #184d87;
+  --color-navy: #123a66;
+  --color-panel: #edf2f7;
+  --color-body: #23303d;
+  --color-muted: #5a6b7c;
+  --color-hairline: #dbe3ec;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica,
+    Arial, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #ffffff;
+  color: var(--color-body);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The wordmark and headings carry the brand's tighter tracking. */
+.tracking-wordmark {
+  letter-spacing: 0.14em;
+}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="210" viewBox="0 0 400 210" role="img" aria-label="Homewick Cleaning">
+  <title>Homewick Cleaning</title>
+  <rect x="0" y="0" width="400" height="210" fill="#FFFFFF"/>
+  <path d="M152 84 L200 50 L248 84" fill="none" stroke="#1F5FA6" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="200" y="128" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="30" font-weight="500" fill="#123A66">HOMEWICK</text>
+  <rect x="128" y="142" width="144" height="26" rx="13" fill="#1F5FA6"/>
+  <text x="200" y="159" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11" letter-spacing="4" fill="#FFFFFF">CLEANING</text>
+</svg>
