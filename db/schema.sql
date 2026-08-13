@@ -314,3 +314,44 @@ insert into add_ons (code, name, price_cents, free_perk_eligible, sort_order) va
   ('balcony',     'Balcony / patio',      2500, true,  4),
   ('cabinets',    'Cabinet interiors',    4500, false, 5),
   ('laundry',     'Laundry, per load',    2500, false, 6);
+
+-- ---------------------------------------------------------------
+-- Row-level security
+--
+-- This matters most on Supabase, where every table in the public schema is
+-- automatically served over HTTP by PostgREST. Without RLS, anybody holding
+-- the anon key — which ships in browser bundles by design — could read the
+-- customer list, home addresses, and the access-secret rows.
+--
+-- RLS is enabled with no policies attached, which denies everything through
+-- PostgREST. The app is unaffected: it connects over Postgres as the table
+-- owner, and owners bypass RLS unless "force row level security" is set.
+-- Deliberately not forced here for that reason.
+--
+-- When a customer portal arrives it gets its own explicit policies. Until
+-- then, no policy is the correct policy.
+-- ---------------------------------------------------------------
+
+alter table customers               enable row level security;
+alter table cleaners                enable row level security;
+alter table properties              enable row level security;
+alter table property_access_secrets enable row level security;
+alter table access_reveals          enable row level security;
+alter table subscriptions           enable row level security;
+alter table subscription_periods    enable row level security;
+alter table visits                  enable row level security;
+alter table visit_add_ons           enable row level security;
+alter table visit_photos            enable row level security;
+alter table visit_feedback          enable row level security;
+alter table service_agreements      enable row level security;
+
+-- The price book and add-on catalog are the same numbers the marketing pages
+-- already publish, so they are readable. Writes still require a real
+-- connection.
+alter table service_prices    enable row level security;
+alter table membership_prices enable row level security;
+alter table add_ons           enable row level security;
+
+create policy "public read" on service_prices    for select using (true);
+create policy "public read" on membership_prices for select using (true);
+create policy "public read" on add_ons           for select using (true);

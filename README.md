@@ -25,9 +25,19 @@ invoices.
 ```bash
 npm install
 cp .env.example .env.local     # then fill it in
-psql "$DATABASE_URL" -f db/schema.sql
+npm run db:setup               # applies db/schema.sql
+npm run db:check               # end-to-end check, rolled back afterwards
 npm run dev
 ```
+
+`db:setup` and `db:check` read `.env.local` themselves, so the connection
+string never needs to go on a command line or into shell history. `db:check`
+does all of its work inside a transaction it rolls back, so it is safe to run
+against a database that has real bookings in it.
+
+For Supabase, the connection string is under Project Settings → Database →
+Connection string → URI. Use the pooled string (port 6543) for
+`DATABASE_URL`, since the app runs serverless on Vercel.
 
 `npm test` runs the suite. It includes an integration test that applies
 `db/schema.sql` to an in-process Postgres (PGlite) and drives the visit
@@ -85,6 +95,14 @@ real.
 
 - **Cancellation is a state, not a delete.** Visits keep generating until the
   computed end date.
+
+- **Row-level security is enabled on every table.** This matters most on
+  Supabase, where anything in the `public` schema is served over HTTP by
+  PostgREST — without RLS the anon key, which ships in browser bundles by
+  design, would read the customer list, home addresses, and the access-secret
+  rows. RLS is on with no policies except public read on the price book, which
+  denies everything else through PostgREST. The app is unaffected because it
+  connects as the table owner, and owners bypass RLS unless it is forced.
 
 ## Compliance guardrails
 

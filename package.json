@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:setup": "node scripts/setup-db.mjs",
+    "db:check": "node scripts/check-db.mjs"
   },
   "dependencies": {
     "next": "16.3.0",

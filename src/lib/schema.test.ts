@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { decryptSecret, encryptSecret } from "./secrets";
 import { beforeAll, afterAll, test } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { citext } from "@electric-sql/pglite/contrib/citext";
@@ -56,6 +58,32 @@ test("schema applies cleanly and seeds launch pricing", async () => {
   assert.deepEqual(
     perk.rows.map((r) => r.code),
     ["oven", "fridge", "windows", "balcony"],
+  );
+});
+
+test("every table holding customer data has row-level security enabled", async () => {
+  // On Supabase these tables are served over HTTP by PostgREST. Without RLS,
+  // the anon key — which ships in browser bundles — would read the customer
+  // list, home addresses, and the access-secret rows.
+  const { rows } = await db.query<{ tablename: string; rowsecurity: boolean }>(
+    `select tablename, rowsecurity from pg_tables
+      where schemaname = 'public' order by tablename`,
+  );
+
+  const unprotected = rows.filter((t) => !t.rowsecurity).map((t) => t.tablename);
+  assert.deepEqual(unprotected, [], `tables missing RLS: ${unprotected.join(", ")}`);
+});
+
+test("only the price book is publicly readable", async () => {
+  const { rows } = await db.query<{ tablename: string }>(
+    `select distinct tablename from pg_policies
+      where schemaname = 'public' order by tablename`,
+  );
+
+  assert.deepEqual(
+    rows.map((r) => r.tablename),
+    ["add_ons", "membership_prices", "service_prices"],
+    "a table other than the price book has been made publicly readable",
   );
 });
 
@@ -256,6 +284,37 @@ test("generated visits carry the pet surcharge and stay inside their period", as
       `visit ${row.scheduled_date} escaped period ${row.period_start}–${row.period_end}`,
     );
   }
+});
+
+test("an entry code round-trips through the encrypted bytea column", async () => {
+  const { propertyId } = await seedCustomer("secrets@example.com");
+
+  process.env.ACCESS_SECRET_KEY = randomBytes(32).toString("base64");
+  const plaintext = "gate 4821, then unit 410";
+
+  await db.query(
+    `insert into property_access_secrets (property_id, door_code_enc) values ($1, $2)`,
+    [propertyId, encryptSecret(plaintext)],
+  );
+
+  const { rows } = await db.query<{ door_code_enc: Uint8Array }>(
+    "select door_code_enc from property_access_secrets where property_id = $1",
+    [propertyId],
+  );
+
+  // What lands in the column must not be readable without the key.
+  const stored = Buffer.from(rows[0].door_code_enc);
+  assert.ok(!stored.toString("utf8").includes("4821"), "entry code stored in the clear");
+
+  assert.equal(decryptSecret(stored), plaintext);
+});
+
+test("a tampered ciphertext is rejected rather than silently decrypted", async () => {
+  process.env.ACCESS_SECRET_KEY = randomBytes(32).toString("base64");
+  const sealed = encryptSecret("door 1234")!;
+  sealed[sealed.length - 1] ^= 0xff;
+
+  assert.throws(() => decryptSecret(sealed));
 });
 
 test("a date-only visit does not slip to the previous day in local time", async () => {
