@@ -22,8 +22,31 @@ function createPool(): Pool {
     connectionString,
     max: 5,
     idleTimeoutMillis: 30_000,
-    ssl: connectionString.includes("localhost") ? undefined : { rejectUnauthorized: false },
+    ssl: sslFor(connectionString),
   });
+}
+
+/**
+ * Hosted Postgres (Supabase, Neon) requires TLS; a local one generally has no
+ * certificate at all and refuses the handshake. Matching on the literal string
+ * "localhost" is not enough — 127.0.0.1 and ::1 are just as local.
+ */
+export function sslFor(
+  connectionString: string,
+): { rejectUnauthorized: boolean } | undefined {
+  let host = "";
+  let sslmode: string | null = null;
+  try {
+    const url = new URL(connectionString);
+    host = url.hostname.replace(/^\[|\]$/g, "");
+    sslmode = url.searchParams.get("sslmode");
+  } catch {
+    // Fall through: an unparseable string gets the safe, TLS-on default.
+  }
+
+  if (sslmode === "disable") return undefined;
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1") return undefined;
+  return { rejectUnauthorized: false };
 }
 
 /** Reused across hot reloads in dev so we don't leak connections. */
