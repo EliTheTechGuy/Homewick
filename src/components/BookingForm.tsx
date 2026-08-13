@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { submitBooking } from "@/actions/booking";
 import { createCheckoutSession } from "@/actions/checkout";
@@ -26,21 +26,18 @@ const ENTRY_METHODS: { id: EntryMethod; label: string; hint: string }[] = [
   { id: "key_location", label: "Key location", hint: "Lockbox location and code, or front-desk instructions" },
 ];
 
-export function BookingForm() {
+export function BookingForm({
+  initialPlan,
+  initialSize,
+}: {
+  initialPlan: Plan;
+  initialSize: UnitSize;
+}) {
   const router = useRouter();
-  const params = useSearchParams();
   const [pending, startTransition] = useTransition();
 
-  const [plan, setPlan] = useState<Plan>(
-    params.get("plan") === "membership" ? "membership" : "one_time",
-  );
-  const [unitSize, setUnitSize] = useState<UnitSize>(
-    (["studio_1br", "2br_2ba", "3br_2ba"] as const).includes(
-      params.get("size") as UnitSize,
-    )
-      ? (params.get("size") as UnitSize)
-      : "2br_2ba",
-  );
+  const [plan, setPlan] = useState<Plan>(initialPlan);
+  const [unitSize, setUnitSize] = useState<UnitSize>(initialSize);
   const [serviceType, setServiceType] = useState<ServiceType>("standard");
   const [addOns, setAddOns] = useState<string[]>([]);
   const [freePerk, setFreePerk] = useState("");
@@ -51,6 +48,18 @@ export function BookingForm() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+
+  /**
+   * Until React has hydrated, the submit button is inert.
+   *
+   * Without this, a click landing before hydration falls through to a native
+   * form submission. The form has no action, so the browser issues a GET to
+   * this same page with every field in the query string — including the door
+   * and gate codes, which would then sit in browser history, server access
+   * logs, and any referrer header. Entry codes must never reach a URL.
+   */
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
 
   const quote = useMemo(
     () =>
@@ -136,7 +145,15 @@ export function BookingForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-12 grid gap-12 lg:grid-cols-[1fr_20rem]">
+    <form
+      onSubmit={handleSubmit}
+      // Submission always goes through handleSubmit. method="post" only
+      // matters for a native submit that beats hydration — pressing Enter in a
+      // field, say — where it keeps the fields in the request body instead of
+      // appending them to the URL.
+      method="post"
+      className="mt-12 grid gap-12 lg:grid-cols-[1fr_20rem]"
+    >
       <div className="space-y-12">
         {formError && (
           <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
@@ -434,7 +451,7 @@ export function BookingForm() {
 
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || !hydrated}
             className="mt-6 w-full rounded-full bg-accent px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-accent-dark disabled:opacity-60"
           >
             {pending ? "Saving…" : "Continue to payment"}

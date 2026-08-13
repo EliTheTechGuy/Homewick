@@ -37,6 +37,13 @@ const MAX_PERIODS_AHEAD = 3;
 /** Gap between the two visits in a period. */
 const VISIT_SPACING_DAYS = 14;
 
+/**
+ * Nothing is ever scheduled inside this window. Someone who signs up at 2pm
+ * must not be given a cleaner at 9am the same morning, and the crew needs
+ * notice to be dispatched at all.
+ */
+export const MIN_LEAD_DAYS = 2;
+
 export const CANCELLATION_NOTICE_DAYS = 14;
 export const RATE_CHANGE_NOTICE_DAYS = 30;
 
@@ -132,11 +139,20 @@ export function visitDatesForPeriod(
   period: Period,
   preferredWeekday: number | null,
   visitsPerPeriod: number,
+  /**
+   * Earliest date a visit may fall on. Used to keep the first period's
+   * cleanings behind the onboarding deep clean, and to stop the daily
+   * generator from ever scheduling something for today.
+   */
+  notBefore?: ISODate,
 ): ISODate[] {
+  const earliest =
+    notBefore && isBefore(period.start, notBefore) ? notBefore : period.start;
+
   const first =
     preferredWeekday === null
-      ? period.start
-      : firstWeekdayOnOrAfter(period.start, preferredWeekday);
+      ? earliest
+      : firstWeekdayOnOrAfter(earliest, preferredWeekday);
 
   const dates: ISODate[] = [];
   for (let i = 0; i < visitsPerPeriod; i++) {
@@ -164,6 +180,12 @@ export async function generateForSubscription(
   client: PoolClient,
   sub: SubscriptionRow,
   from: ISODate = today(),
+  /**
+   * Earliest acceptable visit date. At signup this is the day after the
+   * onboarding deep clean, so the deep clean stays first; on the daily cron
+   * it just keeps visits out of the immediate future.
+   */
+  notBefore: ISODate = addDays(from, MIN_LEAD_DAYS),
 ): Promise<{ periodsCreated: number; visitsCreated: number }> {
   let periodsCreated = 0;
   let visitsCreated = 0;
@@ -204,6 +226,7 @@ export async function generateForSubscription(
       period,
       sub.preferred_weekday,
       sub.visits_per_period,
+      notBefore,
     );
 
     for (const date of wanted.slice(existingVisits)) {
