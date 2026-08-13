@@ -54,9 +54,22 @@ string never needs to go on a command line or into shell history. `db:check`
 does all of its work inside a transaction it rolls back, so it is safe to run
 against a database that has real bookings in it.
 
-For Supabase, the connection string is under Project Settings → Database →
-Connection string → URI. Use the pooled string (port 6543) for
-`DATABASE_URL`, since the app runs serverless on Vercel.
+## The connection string
+
+Use the **pooled** string, under Project Settings → Database → Connection
+string → Transaction pooler. It looks like this — note the project ref in the
+username and port 6543:
+
+```
+postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
+```
+
+This is not a preference. Supabase's direct host, `db.<ref>.supabase.co`,
+publishes only an AAAA record, and Vercel's functions do not route IPv6, so
+the direct string cannot connect from production at all. It also opens a
+Postgres connection per function invocation, which exhausts the server under
+any real traffic. The direct string is fine from a laptop, which is why it
+works locally and then fails once deployed.
 
 `npm test` runs the suite. It includes an integration test that applies
 the real migration sequence to an in-process Postgres (PGlite) and drives the visit
@@ -150,9 +163,17 @@ before 8am or after 9pm local. TCPA penalties are per message.
 
 These are unresolved and must not be guessed at in code.
 
-- **Email domain.** The address in use is `info@homewickcleaning.com` but the
-  domain owned is the `.net`. `NEXT_PUBLIC_CONTACT_EMAIL` is left unset and
-  contact details do not render until it is decided.
+- **Email address.** The domain question is settled — it is
+  `homewickcleaning.net`. The `.com` belongs to someone else: it serves a live
+  site on Squarespace and has Google Workspace MX records, so mail sent to
+  `info@homewickcleaning.com` reaches a stranger. Anywhere that address still
+  appears offline — business cards, invoices, the Wix site — is sending
+  enquiries to the wrong company.
+
+  What remains is mail hosting. `homewickcleaning.net` has no MX records
+  today, so `info@homewickcleaning.net` would bounce.
+  `NEXT_PUBLIC_CONTACT_EMAIL` stays unset until mail is actually delivered,
+  and the footer omits contact details while it is.
 - **Employee vs contractor classification** for cleaners.
 - **House pricing tier** — current pricing is apartments only.
 - **A one-clean-per-month membership tier.**
