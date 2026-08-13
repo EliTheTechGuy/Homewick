@@ -25,12 +25,31 @@ invoices.
 ```bash
 npm install
 cp .env.example .env.local     # then fill it in
-npm run db:setup               # applies db/schema.sql
+npm run db:migrate             # applies anything pending in db/migrations
 npm run db:check               # end-to-end check, rolled back afterwards
 npm run dev
 ```
 
-`db:setup` and `db:check` read `.env.local` themselves, so the connection
+## Changing the schema
+
+`db/migrations` holds numbered SQL files that run in filename order. Each runs
+in its own transaction and is recorded in `schema_migrations`, so it is applied
+exactly once and a failure leaves the database untouched.
+
+```bash
+# add db/migrations/0002_add_house_pricing.sql, then:
+npm run db:migrate -- --dry    # show what would run
+npm run db:migrate             # apply it
+```
+
+Never edit a migration that has already run — the runner compares checksums and
+refuses, because changing the file does not change the database. Write a new
+one instead.
+
+A database that already had the schema installed before migrations existed is
+detected and baselined rather than rebuilt.
+
+`db:migrate` and `db:check` read `.env.local` themselves, so the connection
 string never needs to go on a command line or into shell history. `db:check`
 does all of its work inside a transaction it rolls back, so it is safe to run
 against a database that has real bookings in it.
@@ -40,14 +59,14 @@ Connection string → URI. Use the pooled string (port 6543) for
 `DATABASE_URL`, since the app runs serverless on Vercel.
 
 `npm test` runs the suite. It includes an integration test that applies
-`db/schema.sql` to an in-process Postgres (PGlite) and drives the visit
+the real migration sequence to an in-process Postgres (PGlite) and drives the visit
 generator against it, so schema and generator changes are checked without
 needing a live database.
 
 ## Layout
 
 ```
-db/schema.sql                    schema, constraints, and launch pricing seed
+db/migrations/                    numbered schema migrations
 src/app/(site)/                  public site
 src/app/admin/                   today-view, password-gated
 src/app/api/stripe/webhook/      subscription state from Stripe

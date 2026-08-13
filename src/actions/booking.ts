@@ -58,7 +58,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
       ok: false,
       fieldErrors: {},
       formError:
-        "Booking is not connected to a database yet. Set DATABASE_URL and ACCESS_SECRET_KEY, then run db/schema.sql.",
+        "Booking is not connected to a database yet. Set DATABASE_URL and ACCESS_SECRET_KEY, then run npm run db:migrate.",
     };
   }
 
