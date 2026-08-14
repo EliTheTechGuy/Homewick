@@ -11,6 +11,7 @@ import { WEEKDAYS, today, addDays } from "@/lib/dates";
 import {
   ADD_ONS,
   FREE_PERK_ELIGIBLE,
+  PET_SURCHARGE_CENTS,
   SERVICE_TYPES,
   UNIT_SIZES,
   type ServiceType,
@@ -355,7 +356,7 @@ export function BookingForm({
               className="h-4 w-4 accent-[#1F5FA6]"
             />
             <span className="text-sm text-body">
-              There are pets in the home ({formatCents(1500)} per visit)
+              There are pets in the home (one-time {formatCents(PET_SURCHARGE_CENTS)})
             </span>
           </label>
         </Fieldset>

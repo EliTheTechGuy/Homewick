@@ -46,7 +46,7 @@ const rules = [
   },
   {
     q: "I have pets.",
-    a: `A ${formatCents(PET_SURCHARGE_CENTS)} surcharge applies per visit when there are pets in the home. It is recurring rather than a one-time add-on.`,
+    a: `A one-time ${formatCents(PET_SURCHARGE_CENTS)} surcharge applies when there are pets in the home. It is charged once, on your first booking — not on every clean.`,
   },
 ];
 

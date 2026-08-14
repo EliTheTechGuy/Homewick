@@ -137,7 +137,9 @@ export default async function AdminTodayPage({
                 <Tag>{unitSizeLabel(visit.unit_size)}</Tag>
                 <Tag>{serviceLabel(visit.service_type)}</Tag>
                 <Tag>{visit.origin === "membership" ? "Membership" : "One-time"}</Tag>
-                {visit.has_pets && <Tag tone="warn">Pets · {formatCents(visit.pet_surcharge_cents)}</Tag>}
+                {/* The surcharge is one-time and usually zero by now, so the
+                    cleaner just needs to know there are animals in the home. */}
+                {visit.has_pets && <Tag tone="warn">Pets</Tag>}
                 <Tag tone={visit.status === "completed" ? "good" : "plain"}>
                   {visit.status}
                 </Tag>

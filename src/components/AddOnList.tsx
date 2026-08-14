@@ -25,7 +25,7 @@ export function AddOnList({ className = "" }: { className?: string }) {
           <dt className="text-body">Pet home surcharge</dt>
           <dd className="shrink-0 text-lg font-semibold text-accent">
             {formatCents(PET_SURCHARGE_CENTS)}
-            <span className="text-sm font-medium text-muted"> per visit</span>
+            <span className="text-sm font-medium text-muted"> one-time</span>
           </dd>
         </div>
         <div className="flex items-baseline justify-between gap-4 border-b border-hairline py-4">

@@ -148,9 +148,8 @@ export function quoteFor(input: QuoteParams): Quote {
     });
   }
 
-  // Recurring per visit whenever the property has pets — for a membership
-  // signup this covers the onboarding deep clean, and it is then applied to
-  // every generated visit.
+  // A single charge on this booking whenever the property has pets. It is
+  // deliberately not repeated on later visits.
   if (input.hasPets) {
     lines.push({ label: "Pet home surcharge", amountCents: PET_SURCHARGE_CENTS });
   }

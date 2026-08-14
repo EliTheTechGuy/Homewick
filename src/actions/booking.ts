@@ -148,6 +148,8 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
         ],
       );
 
+      // Charged once, on this booking. The subscription itself carries no pet
+      // surcharge, so nothing recurring is ever derived from it.
       const petSurcharge = input.hasPets ? PET_SURCHARGE_CENTS : 0;
 
       if (input.plan === "membership") {
@@ -168,7 +170,9 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
             // Snapshotted, not looked up — this is what grandfathers the rate.
             MEMBERSHIP_PRICES[input.unitSize].monthlyCents,
             VISITS_PER_PERIOD,
-            petSurcharge,
+            // Zero: the pet surcharge is one-time and sits on the onboarding
+            // deep clean below, never on the recurring subscription.
+            0,
             input.preferredWeekday ?? null,
             startedOn,
             billingDay,
@@ -211,7 +215,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
           status: "active",
           monthly_amount_cents: MEMBERSHIP_PRICES[input.unitSize].monthlyCents,
           visits_per_period: VISITS_PER_PERIOD,
-          pet_surcharge_cents: petSurcharge,
+          pet_surcharge_cents: 0,
           preferred_weekday: input.preferredWeekday ?? null,
           started_on: startedOn,
           billing_day: billingDay,

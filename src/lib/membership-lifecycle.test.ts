@@ -230,3 +230,28 @@ test("a paid add-on is included in the quoted total", async () => {
   // Laundry is not perk-eligible, so a member pays it at 10% off: 2500 -> 2250.
   assert.equal(quote.totalCents, 26900 + 20315 + 2250);
 });
+
+test("the pet surcharge is charged once, not on every visit", async () => {
+  const { quoteFor } = await import("./booking-schema");
+
+  const withPets = quoteFor({
+    plan: "membership",
+    unitSize: "2br_2ba",
+    addOns: [],
+    hasPets: true,
+  });
+  const withoutPets = quoteFor({
+    plan: "membership",
+    unitSize: "2br_2ba",
+    addOns: [],
+    hasPets: false,
+  });
+
+  // Exactly one surcharge on the whole signup — not one per cleaning, and not
+  // folded into the recurring monthly rate.
+  assert.equal(withPets.totalCents - withoutPets.totalCents, 1500);
+  assert.equal(
+    withPets.lines.filter((l) => l.label === "Pet home surcharge").length,
+    1,
+  );
+});
