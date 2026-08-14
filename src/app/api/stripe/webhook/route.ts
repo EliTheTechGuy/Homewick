@@ -15,16 +15,18 @@ import { isStripeConfigured, stripe } from "@/lib/stripe";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  if (!isStripeConfigured()) {
-    return NextResponse.json({ error: "Stripe is not configured." }, { status: 503 });
-  }
-
+  // This endpoint is public, so its replies name nothing. Reporting which
+  // variable is missing turns it into a configuration oracle for anyone who
+  // curls it — handy for debugging, and no less handy for a stranger.
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!secret) {
-    return NextResponse.json(
-      { error: "STRIPE_WEBHOOK_SECRET is not set." },
-      { status: 503 },
+  if (!isStripeConfigured() || !secret) {
+    console.error(
+      "Stripe webhook unavailable: missing",
+      [!isStripeConfigured() && "STRIPE_SECRET_KEY", !secret && "STRIPE_WEBHOOK_SECRET"]
+        .filter(Boolean)
+        .join(", "),
     );
+    return NextResponse.json({ error: "Unavailable." }, { status: 503 });
   }
 
   const signature = request.headers.get("stripe-signature");

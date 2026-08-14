@@ -72,8 +72,23 @@ export const VISITS_PER_PERIOD = 2;
  */
 export const PET_SURCHARGE_CENTS = 1500;
 
-/** Discount applied to a new member's onboarding deep clean. */
-export const MEMBER_DEEP_CLEAN_DISCOUNT = 0.15;
+/**
+ * Discount on a new member's first month. Applied once, then the normal
+ * monthly rate applies.
+ *
+ * This used to discount a separately-billed onboarding deep clean. Charging
+ * the membership *and* a deep clean meant a member paid twice for their first
+ * month of service, so the deep clean is now simply the first of that month's
+ * two cleanings and the discount moved onto the membership itself.
+ */
+export const MEMBER_FIRST_MONTH_DISCOUNT = 0.15;
+
+/** What a new member pays today. Their second month onward is the full rate. */
+export function firstMonthCents(size: UnitSize): number {
+  return Math.round(
+    MEMBERSHIP_PRICES[size].monthlyCents * (1 - MEMBER_FIRST_MONTH_DISCOUNT),
+  );
+}
 
 export type AddOn = {
   code: string;
@@ -97,7 +112,8 @@ export const FREE_PERK_ELIGIBLE = ADD_ONS.filter((a) => a.freePerkEligible);
 export const MEMBER_BENEFITS = [
   "One free add-on every month from the eligible list",
   "The same cleaner whenever scheduling allows",
-  "15% off your onboarding deep clean",
+  "15% off your first month",
+  "Your first clean is a deep clean, included",
   "10% off any additional add-ons",
   "Priority scheduling",
 ];
