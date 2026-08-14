@@ -37,12 +37,9 @@ export async function sendEmail(params: {
         to: [params.to],
         subject: params.subject,
         text: params.text,
-        // Mail is sent from the domain that serves the site, so replies would
-        // otherwise land in a mailbox nobody reads. Point them at the real
-        // inbox instead — members do reply to these.
-        ...(process.env.EMAIL_REPLY_TO
-          ? { reply_to: process.env.EMAIL_REPLY_TO }
-          : {}),
+        // No reply-to header on purpose. This address does not take mail, and
+        // the message says so — pointing replies somewhere they are not read
+        // would be worse than telling people plainly not to reply.
       }),
     });
 
@@ -67,6 +64,10 @@ export function signInEmail(url: string): { subject: string; text: string } {
       "",
       "It works once and expires in 15 minutes.",
       "If you did not ask for this, you can ignore it — nothing has changed.",
+      "",
+      "---",
+      "This address does not receive mail, so please do not reply.",
+      `To book, change a visit, or ask us anything, use ${site.url}.`,
     ].join("\n"),
   };
 }
