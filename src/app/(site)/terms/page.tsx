@@ -58,8 +58,10 @@ export default function TermsPage() {
                 entitlement resets each period and does not accumulate.
               </li>
               <li>
-                New members begin with an onboarding deep clean at 15% off. It is billed
-                separately from the monthly membership charge.
+                A new member's first cleaning is a deep clean. It is one of the two
+                cleanings included in the first billing period, not an additional charge.
+                The first month is charged at 15% off; subsequent months are at the
+                standard rate.
               </li>
               <li>
                 Members receive 10% off additional add-ons, priority scheduling, and the

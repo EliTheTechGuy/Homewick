@@ -2,9 +2,9 @@ import { z } from "zod";
 import {
   ADD_ONS,
   FREE_PERK_ELIGIBLE,
-  MEMBERSHIP_PRICES,
   PET_SURCHARGE_CENTS,
   SERVICE_PRICES,
+  firstMonthCents,
 } from "./pricing";
 import { isISODate } from "./dates";
 
@@ -149,12 +149,13 @@ export function quoteFor(input: QuoteParams): Quote {
   const lines: { label: string; amountCents: number }[] = [];
 
   if (input.plan === "membership") {
-    const membership = MEMBERSHIP_PRICES[input.unitSize];
-    lines.push({ label: "Membership, first month", amountCents: membership.monthlyCents });
-
-    const deepClean = SERVICE_PRICES[input.unitSize].deep;
-    const discounted = Math.round(deepClean * 0.85);
-    lines.push({ label: "Onboarding deep clean (15% off)", amountCents: discounted });
+    // A member pays the membership price and nothing else. The onboarding deep
+    // clean is one of the first month's two cleanings, not a second charge on
+    // top — billing both charged twice for the same month of service.
+    lines.push({
+      label: "Membership, first month (15% off)",
+      amountCents: firstMonthCents(input.unitSize),
+    });
   } else if (input.serviceType) {
     lines.push({
       label: SERVICE_LINE_LABELS[input.serviceType],

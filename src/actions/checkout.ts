@@ -4,7 +4,11 @@ import type Stripe from "stripe";
 import { queryOne } from "@/lib/db";
 import { isStripeConfigured, stripe } from "@/lib/stripe";
 import { site } from "@/lib/site";
-import { unitSizeLabel, type UnitSize } from "@/lib/pricing";
+import {
+  MEMBER_FIRST_MONTH_DISCOUNT,
+  unitSizeLabel,
+  type UnitSize,
+} from "@/lib/pricing";
 
 /**
  * Creates a Stripe Checkout session for a booking that is already in the
@@ -51,6 +55,31 @@ type CustomerRow = {
   stripe_customer_id: string | null;
 };
 
+/**
+ * The new-member discount, as a Stripe coupon.
+ *
+ * Created once and then reused by a fixed id, so repeated signups do not
+ * litter the account with identical coupons. Stripe has no upsert for these,
+ * so this retrieves first and creates only when it is genuinely absent.
+ */
+async function firstMonthCoupon(): Promise<string> {
+  const id = `homewick-first-month-${Math.round(MEMBER_FIRST_MONTH_DISCOUNT * 100)}`;
+  const s = stripe();
+
+  try {
+    await s.coupons.retrieve(id);
+    return id;
+  } catch {
+    await s.coupons.create({
+      id,
+      percent_off: MEMBER_FIRST_MONTH_DISCOUNT * 100,
+      duration: "once",
+      name: "New member — first month",
+    });
+    return id;
+  }
+}
+
 async function membershipSession(subscriptionId: string) {
   const row = await queryOne<
     CustomerRow & { unit_size: UnitSize; monthly_amount_cents: number }
@@ -64,21 +93,16 @@ async function membershipSession(subscriptionId: string) {
   );
   if (!row) return { error: "That booking could not be found." };
 
-  // The onboarding deep clean, already scheduled as a one-off visit.
-  //
-  // Every chargeable component is read back, not just the base rate. Charging
-  // base_amount_cents alone quoted the customer one figure on the booking page
-  // and billed them a smaller one — a pet home was quoted $487.15 and charged
-  // $472.15, silently dropping the surcharge.
-  const deepClean = await queryOne<{
-    id: string;
-    base_amount_cents: number;
-    pet_surcharge_cents: number;
-  }>(
-    `select id, base_amount_cents, pet_surcharge_cents from visits
-      where customer_id = $1 and origin = 'one_off' and service_type = 'deep'
-      order by created_at desc limit 1`,
-    [row.customer_id],
+  // The one-time pet surcharge rides on the member's first cleaning, which is
+  // their onboarding deep clean. Every chargeable component is read back, not
+  // just the headline rate — reading only the base once quoted a pet home
+  // $487.15 and charged $472.15.
+  const firstVisit = await queryOne<{ pet_surcharge_cents: number }>(
+    `select pet_surcharge_cents from visits
+      where subscription_id = $1
+      order by scheduled_for
+      limit 1`,
+    [subscriptionId],
   );
 
   // Paid add-ons ride on the member's first scheduled cleaning. The free perk
@@ -106,26 +130,13 @@ async function membershipSession(subscriptionId: string) {
     },
   ];
 
-  if (deepClean && deepClean.base_amount_cents > 0) {
+  if (firstVisit && firstVisit.pet_surcharge_cents > 0) {
     lineItems.push({
       quantity: 1,
       price_data: {
         currency: "usd",
-        unit_amount: deepClean.base_amount_cents,
-        product_data: {
-          name: "Onboarding deep clean (15% member discount)",
-        },
-      },
-    });
-  }
-
-  if (deepClean && deepClean.pet_surcharge_cents > 0) {
-    lineItems.push({
-      quantity: 1,
-      price_data: {
-        currency: "usd",
-        unit_amount: deepClean.pet_surcharge_cents,
-        product_data: { name: "Pet home surcharge" },
+        unit_amount: firstVisit.pet_surcharge_cents,
+        product_data: { name: "Pet home surcharge (one-time)" },
       },
     });
   }
@@ -144,6 +155,11 @@ async function membershipSession(subscriptionId: string) {
   const session = await stripe().checkout.sessions.create({
     mode: "subscription",
     line_items: lineItems,
+    // The first month is discounted; every month after is the full rate. A
+    // once-duration coupon is how Stripe expresses that, and it keeps the
+    // recurring price honest — the subscription really is $269/month, so a
+    // rate change later does not have to unpick a bespoke first invoice.
+    discounts: [{ coupon: await firstMonthCoupon() }],
     customer: row.stripe_customer_id ?? undefined,
     customer_email: row.stripe_customer_id ? undefined : row.email,
     success_url: `${site.url}/book/confirmed?ref=${subscriptionId}&session_id={CHECKOUT_SESSION_ID}`,

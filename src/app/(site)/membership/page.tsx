@@ -34,7 +34,7 @@ const rules = [
   },
   {
     q: "What happens when I join?",
-    a: "New members start with a deep clean at 15% off. It is charged separately from the first month rather than bundled into it, so your monthly rate stays what it says it is.",
+    a: "Your first cleaning is a deep clean, and it is one of the two cleanings your first month already covers — not an extra charge. Your first month is also 15% off; every month after is the standard rate.",
   },
   {
     q: "How do I cancel?",

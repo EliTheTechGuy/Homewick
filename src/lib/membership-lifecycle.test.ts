@@ -200,20 +200,20 @@ test("a membership quote bills every component it displays", async () => {
     hasPets: true,
   });
 
-  // What checkout builds its line items from, per src/actions/checkout.ts:
-  // the monthly rate, the discounted deep clean, the deep clean's pet
-  // surcharge, and any paid add-ons.
-  const monthly = 26900;
-  const deepClean = Math.round(23900 * 0.85); // 20315
+  // What checkout builds its line items from: the monthly rate with the
+  // first-month discount applied, the one-time pet surcharge, and paid add-ons.
+  // There is deliberately no separate deep-clean charge — the deep clean is one
+  // of the two cleanings the first month already pays for.
+  const firstMonth = Math.round(26900 * 0.85); // 22865
   const petSurcharge = 1500;
   const paidAddOns = 0; // the only add-on chosen is the free perk
 
   assert.equal(
     quote.totalCents,
-    monthly + deepClean + petSurcharge + paidAddOns,
+    firstMonth + petSurcharge + paidAddOns,
     "the displayed total and the Stripe line items have drifted apart",
   );
-  assert.equal(quote.totalCents, 48715);
+  assert.equal(quote.totalCents, 24365);
 });
 
 test("a paid add-on is included in the quoted total", async () => {
@@ -228,7 +228,7 @@ test("a paid add-on is included in the quoted total", async () => {
   });
 
   // Laundry is not perk-eligible, so a member pays it at 10% off: 2500 -> 2250.
-  assert.equal(quote.totalCents, 26900 + 20315 + 2250);
+  assert.equal(quote.totalCents, Math.round(26900 * 0.85) + 2250);
 });
 
 test("the pet surcharge is charged once, not on every visit", async () => {
@@ -285,4 +285,28 @@ test("a front-desk booking needs no entry code", async () => {
     blankCode.error!.issues.map((i) => i.message).join(" "),
     /Add the code/,
   );
+});
+
+test("a member is not charged twice for their first month", async () => {
+  const { quoteFor } = await import("./booking-schema");
+  const { MEMBERSHIP_PRICES, SERVICE_PRICES } = await import("./pricing");
+
+  for (const size of ["studio_1br", "2br_2ba", "3br_2ba"] as const) {
+    const quote = quoteFor({ plan: "membership", unitSize: size, addOns: [], hasPets: false });
+
+    // One line, one charge: the discounted first month. A separately billed
+    // onboarding deep clean on top meant paying twice for the same month.
+    assert.equal(quote.lines.length, 1, `${size} should quote a single charge`);
+    assert.equal(quote.totalCents, Math.round(MEMBERSHIP_PRICES[size].monthlyCents * 0.85));
+
+    // Never more than the ordinary monthly rate.
+    assert.ok(
+      quote.totalCents < MEMBERSHIP_PRICES[size].monthlyCents,
+      `${size} first month should be below the standard rate`,
+    );
+    // And nowhere near the old membership-plus-deep-clean figure.
+    const oldTotal =
+      MEMBERSHIP_PRICES[size].monthlyCents + Math.round(SERVICE_PRICES[size].deep * 0.85);
+    assert.ok(quote.totalCents < oldTotal);
+  }
 });

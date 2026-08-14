@@ -189,34 +189,6 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
         );
         const subscriptionId = subRows[0].id;
 
-        // The onboarding deep clean is a one-off, billed separately from the
-        // first month rather than bundled into it. It is also the member's
-        // first visit, so the regular cleanings are placed after it below.
-        const earliestVisit = addDays(startedOn, MIN_LEAD_DAYS);
-        const firstVisitDate =
-          input.preferredWeekday === undefined
-            ? earliestVisit
-            : firstWeekdayOnOrAfter(earliestVisit, input.preferredWeekday);
-
-        await client.query(
-          `insert into visits
-             (customer_id, property_id, origin, service_type, status,
-              scheduled_for, base_amount_cents, pet_surcharge_cents,
-              customer_instructions)
-           values ($4, $5, 'one_off', 'deep', 'scheduled',
-                   ${timestamptzFromLocal(1, 2, 3)}, $6, $7, $8)`,
-          [
-            firstVisitDate,
-            DEFAULT_VISIT_TIME,
-            TIMEZONE,
-            customerId,
-            propertyId,
-            Math.round(SERVICE_PRICES[input.unitSize].deep * 0.85),
-            petSurcharge,
-            input.instructions || null,
-          ],
-        );
-
         const sub: SubscriptionRow = {
           id: subscriptionId,
           customer_id: customerId,
@@ -232,13 +204,25 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
           pending_amount_effective_on: null,
           ends_on: null,
         };
-        // Regular cleanings start the day after the onboarding deep clean, so
-        // a new member is never sent a standard clean before the deep one.
-        await generateForSubscription(
-          client,
-          sub,
-          startedOn,
-          addDays(firstVisitDate, 1),
+        await generateForSubscription(client, sub, startedOn);
+
+        // The onboarding deep clean is the member's first cleaning, not an
+        // extra visit and not a separate charge — it is one of the two the
+        // first month already pays for. Promote the earliest generated visit
+        // rather than inserting another one, so the period ledger still shows
+        // two visits used, and carry the one-time pet surcharge on it.
+        await client.query(
+          `update visits
+              set service_type = 'deep',
+                  pet_surcharge_cents = $2,
+                  customer_instructions = $3
+            where id = (
+              select id from visits
+               where subscription_id = $1 and status = 'scheduled'
+               order by scheduled_for
+               limit 1
+            )`,
+          [subscriptionId, petSurcharge, input.instructions || null],
         );
 
         await attachAddOns(client, subscriptionId, input, true);
