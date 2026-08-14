@@ -37,6 +37,12 @@ export async function sendEmail(params: {
         to: [params.to],
         subject: params.subject,
         text: params.text,
+        // Mail is sent from the domain that serves the site, so replies would
+        // otherwise land in a mailbox nobody reads. Point them at the real
+        // inbox instead — members do reply to these.
+        ...(process.env.EMAIL_REPLY_TO
+          ? { reply_to: process.env.EMAIL_REPLY_TO }
+          : {}),
       }),
     });
 
