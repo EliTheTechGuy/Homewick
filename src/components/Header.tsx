@@ -8,7 +8,7 @@ const links = [
   { href: "/services", label: "Services" },
   { href: "/membership", label: "Membership" },
   { href: "/pricing", label: "Pricing" },
-  { href: "/terms", label: "Terms" },
+  { href: "/account", label: "My account" },
 ];
 
 export function Header() {
