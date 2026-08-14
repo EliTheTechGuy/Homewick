@@ -19,10 +19,20 @@ export async function createCheckoutSession(
   bookingRef: string,
   kind: "membership" | "one_time",
 ): Promise<{ url: string } | { error: string }> {
+  // The booking row already exists by the time we get here, so the customer
+  // must not be sent back to the form — they would submit it a second time.
+  // Instead they go to the confirmation page, which says plainly that payment
+  // is outstanding. Silently showing the ordinary "Booking received" page put
+  // an unpaid visit on the calendar and told the customer they were done.
+  const unpaid = `/book/confirmed?ref=${encodeURIComponent(bookingRef)}&payment=pending`;
+
   if (!isStripeConfigured()) {
-    // Stripe is not wired up yet — the booking is saved, so send the customer
-    // to the confirmation page rather than failing in front of them.
-    return { url: `/book/confirmed?ref=${encodeURIComponent(bookingRef)}` };
+    console.error(
+      "Checkout skipped: STRIPE_SECRET_KEY is not set. Booking",
+      bookingRef,
+      "is saved but unpaid.",
+    );
+    return { url: unpaid };
   }
 
   try {
@@ -30,8 +40,8 @@ export async function createCheckoutSession(
       ? await membershipSession(bookingRef)
       : await oneOffSession(bookingRef);
   } catch (err) {
-    console.error("Stripe checkout failed", err);
-    return { error: "We could not reach the payment provider. Please try again." };
+    console.error(`Stripe checkout failed for booking ${bookingRef}`, err);
+    return { url: unpaid };
   }
 }
 
