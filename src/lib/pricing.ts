@@ -113,7 +113,6 @@ export const MEMBER_BENEFITS = [
   "One free add-on every month from the eligible list",
   "The same cleaner whenever scheduling allows",
   "15% off your first month",
-  "Your first clean is a deep clean, included",
   "10% off any additional add-ons",
   "Priority scheduling",
 ];

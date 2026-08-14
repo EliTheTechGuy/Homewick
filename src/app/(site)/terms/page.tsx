@@ -58,10 +58,9 @@ export default function TermsPage() {
                 entitlement resets each period and does not accumulate.
               </li>
               <li>
-                A new member's first cleaning is a deep clean. It is one of the two
-                cleanings included in the first billing period, not an additional charge.
-                The first month is charged at 15% off; subsequent months are at the
-                standard rate.
+                A new member's first billing period is charged at 15% off and includes
+                the same number of cleanings as any other period. Subsequent periods are
+                charged at the standard rate.
               </li>
               <li>
                 Members receive 10% off additional add-ons, priority scheduling, and the

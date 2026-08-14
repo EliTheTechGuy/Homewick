@@ -22,7 +22,10 @@ export function AddOnList({ className = "" }: { className?: string }) {
           </div>
         ))}
         <div className="flex items-baseline justify-between gap-4 border-b border-hairline py-4">
-          <dt className="text-body">Pet home surcharge</dt>
+          <dt className="text-body">
+            Pet home surcharge
+            <span className="ml-2 text-xs text-muted">(only if you have pets)</span>
+          </dt>
           <dd className="shrink-0 text-lg font-semibold text-accent">
             {formatCents(PET_SURCHARGE_CENTS)}
             <span className="text-sm font-medium text-muted"> one-time</span>

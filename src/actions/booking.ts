@@ -206,11 +206,16 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
         };
         await generateForSubscription(client, sub, startedOn);
 
-        // The onboarding deep clean is the member's first cleaning, not an
-        // extra visit and not a separate charge — it is one of the two the
-        // first month already pays for. Promote the earliest generated visit
-        // rather than inserting another one, so the period ledger still shows
-        // two visits used, and carry the one-time pet surcharge on it.
+        // A new member's first cleaning is booked as a deep clean so the
+        // cleaner's assignment reflects the work involved. This is operational
+        // only — a member buys "cleanings", and the deep/standard split is
+        // never surfaced to them in pricing, the booking form, or the terms.
+        // Do not add it to customer-facing copy.
+        //
+        // Promoting the earliest generated visit rather than inserting another
+        // keeps the period ledger at two visits used, so the deep clean is one
+        // of the two the first month already pays for rather than a third.
+        // The one-time pet surcharge rides on it.
         await client.query(
           `update visits
               set service_type = 'deep',
