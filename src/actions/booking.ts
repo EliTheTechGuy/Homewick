@@ -54,11 +54,23 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
   const input = parsed.data;
 
   if (!isDatabaseConfigured() || !isSecretKeyConfigured()) {
+    // The customer gets a plain apology; the operator gets the actual cause in
+    // the logs. Naming environment variables on a public page tells a visitor
+    // nothing useful and tells everyone else how the deployment is wired.
+    console.error(
+      "Booking rejected: missing configuration —",
+      [
+        !isDatabaseConfigured() && "DATABASE_URL",
+        !isSecretKeyConfigured() && "ACCESS_SECRET_KEY",
+      ]
+        .filter(Boolean)
+        .join(", "),
+    );
     return {
       ok: false,
       fieldErrors: {},
       formError:
-        "Booking is not connected to a database yet. Set DATABASE_URL and ACCESS_SECRET_KEY, then run npm run db:migrate.",
+        "Online booking is temporarily unavailable. Nothing has been charged — please try again shortly.",
     };
   }
 
