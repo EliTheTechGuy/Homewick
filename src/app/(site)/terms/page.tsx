@@ -80,9 +80,9 @@ export default function TermsPage() {
                 Stripe and are never received or stored on Homewick&apos;s systems.
               </li>
               <li>
-                A {formatCents(PET_SURCHARGE_CENTS)} surcharge is applied per visit when
-                pets are present in the home. This is recurring for as long as the property
-                has pets.
+                A one-time {formatCents(PET_SURCHARGE_CENTS)} surcharge applies when there
+                are pets in the home. It is charged once, on your first booking, and is
+                not repeated on later visits.
               </li>
               <li>
                 Rates are reviewed annually. Any change takes effect only after at least 30

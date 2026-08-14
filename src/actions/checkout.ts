@@ -55,11 +55,30 @@ async function membershipSession(subscriptionId: string) {
   if (!row) return { error: "That booking could not be found." };
 
   // The onboarding deep clean, already scheduled as a one-off visit.
-  const deepClean = await queryOne<{ id: string; base_amount_cents: number }>(
-    `select id, base_amount_cents from visits
+  //
+  // Every chargeable component is read back, not just the base rate. Charging
+  // base_amount_cents alone quoted the customer one figure on the booking page
+  // and billed them a smaller one — a pet home was quoted $487.15 and charged
+  // $472.15, silently dropping the surcharge.
+  const deepClean = await queryOne<{
+    id: string;
+    base_amount_cents: number;
+    pet_surcharge_cents: number;
+  }>(
+    `select id, base_amount_cents, pet_surcharge_cents from visits
       where customer_id = $1 and origin = 'one_off' and service_type = 'deep'
       order by created_at desc limit 1`,
     [row.customer_id],
+  );
+
+  // Paid add-ons ride on the member's first scheduled cleaning. The free perk
+  // is stored at zero, so it contributes nothing here by construction.
+  const addOns = await queryOne<{ total: number }>(
+    `select coalesce(sum(va.price_cents_at_time), 0)::int as total
+       from visit_add_ons va
+       join visits v on v.id = va.visit_id
+      where v.subscription_id = $1`,
+    [subscriptionId],
   );
 
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
@@ -86,6 +105,28 @@ async function membershipSession(subscriptionId: string) {
         product_data: {
           name: "Onboarding deep clean (15% member discount)",
         },
+      },
+    });
+  }
+
+  if (deepClean && deepClean.pet_surcharge_cents > 0) {
+    lineItems.push({
+      quantity: 1,
+      price_data: {
+        currency: "usd",
+        unit_amount: deepClean.pet_surcharge_cents,
+        product_data: { name: "Pet home surcharge" },
+      },
+    });
+  }
+
+  if (addOns && addOns.total > 0) {
+    lineItems.push({
+      quantity: 1,
+      price_data: {
+        currency: "usd",
+        unit_amount: addOns.total,
+        product_data: { name: "Add-ons" },
       },
     });
   }

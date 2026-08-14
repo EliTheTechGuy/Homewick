@@ -133,21 +133,32 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
       const propertyId = propertyRows[0].id;
 
       // Entry details go to the encrypted table, never into general notes.
-      const entry = encryptSecret(input.entryDetail);
-      await client.query(
-        `insert into property_access_secrets
-           (property_id, gate_code_enc, door_code_enc, key_location_enc,
-            alarm_instructions_enc)
-         values ($1, $2, $3, $4, $5)`,
-        [
-          propertyId,
-          input.entryMethod === "gate_code" ? entry : null,
-          input.entryMethod === "door_code" ? entry : null,
-          input.entryMethod === "key_location" ? entry : null,
-          encryptSecret(input.alarmInstructions || null),
-        ],
-      );
+      //
+      // A front-desk booking has no code at all, so there may be nothing to
+      // store. Skip the row entirely in that case rather than writing one full
+      // of nulls — an empty secrets row would still show up in the access log
+      // as something worth revealing.
+      const entry = encryptSecret(input.entryDetail || null);
+      const alarm = encryptSecret(input.alarmInstructions || null);
 
+      if (entry || alarm) {
+        await client.query(
+          `insert into property_access_secrets
+             (property_id, gate_code_enc, door_code_enc, key_location_enc,
+              alarm_instructions_enc)
+           values ($1, $2, $3, $4, $5)`,
+          [
+            propertyId,
+            input.entryMethod === "gate_code" ? entry : null,
+            input.entryMethod === "door_code" ? entry : null,
+            input.entryMethod === "key_location" ? entry : null,
+            alarm,
+          ],
+        );
+      }
+
+      // Charged once, on this booking. The subscription itself carries no pet
+      // surcharge, so nothing recurring is ever derived from it.
       const petSurcharge = input.hasPets ? PET_SURCHARGE_CENTS : 0;
 
       if (input.plan === "membership") {
@@ -168,7 +179,9 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
             // Snapshotted, not looked up — this is what grandfathers the rate.
             MEMBERSHIP_PRICES[input.unitSize].monthlyCents,
             VISITS_PER_PERIOD,
-            petSurcharge,
+            // Zero: the pet surcharge is one-time and sits on the onboarding
+            // deep clean below, never on the recurring subscription.
+            0,
             input.preferredWeekday ?? null,
             startedOn,
             billingDay,
@@ -211,7 +224,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
           status: "active",
           monthly_amount_cents: MEMBERSHIP_PRICES[input.unitSize].monthlyCents,
           visits_per_period: VISITS_PER_PERIOD,
-          pet_surcharge_cents: petSurcharge,
+          pet_surcharge_cents: 0,
           preferred_weekday: input.preferredWeekday ?? null,
           started_on: startedOn,
           billing_day: billingDay,

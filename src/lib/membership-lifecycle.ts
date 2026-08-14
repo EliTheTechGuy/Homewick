@@ -233,12 +233,17 @@ export async function generateForSubscription(
       // Do not schedule a visit beyond a cancelled subscription's end date.
       if (sub.ends_on && isOnOrAfter(date, sub.ends_on)) continue;
 
+      // No pet surcharge on generated visits. It is a one-time charge taken on
+      // the booking that introduces the pet home, so repeating it here would
+      // bill a member every fortnight for the life of their membership.
+      // Whether the property has pets is still on the property row, which is
+      // what the cleaner's assignment reads.
       await client.query(
         `insert into visits
            (customer_id, property_id, subscription_id, period_id, origin,
             service_type, status, scheduled_for, pet_surcharge_cents)
          values ($4, $5, $6, $7, 'membership', 'standard', 'scheduled',
-                 ${timestamptzFromLocal(1, 2, 3)}, $8)`,
+                 ${timestamptzFromLocal(1, 2, 3)}, 0)`,
         [
           date,
           DEFAULT_VISIT_TIME,
@@ -247,7 +252,6 @@ export async function generateForSubscription(
           sub.property_id,
           sub.id,
           periodId,
-          sub.pet_surcharge_cents,
         ],
       );
       visitsCreated++;

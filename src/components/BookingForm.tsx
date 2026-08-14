@@ -11,6 +11,7 @@ import { WEEKDAYS, today, addDays } from "@/lib/dates";
 import {
   ADD_ONS,
   FREE_PERK_ELIGIBLE,
+  PET_SURCHARGE_CENTS,
   SERVICE_TYPES,
   UNIT_SIZES,
   type ServiceType,
@@ -18,12 +19,39 @@ import {
 } from "@/lib/pricing";
 
 type Plan = "one_time" | "membership";
-type EntryMethod = "gate_code" | "door_code" | "key_location";
+type EntryMethod = "door_code" | "gate_code" | "key_location" | "front_desk";
 
-const ENTRY_METHODS: { id: EntryMethod; label: string; hint: string }[] = [
-  { id: "door_code", label: "Door code", hint: "The code for your unit's door or smart lock" },
-  { id: "gate_code", label: "Gate code", hint: "Community or garage gate code, plus your unit number" },
-  { id: "key_location", label: "Key location", hint: "Lockbox location and code, or front-desk instructions" },
+const ENTRY_METHODS: {
+  id: EntryMethod;
+  label: string;
+  hint: string;
+  /** The label for the detail field, or null when nothing is needed. */
+  detailLabel: string | null;
+}[] = [
+  {
+    id: "door_code",
+    label: "Door code",
+    hint: "The code for your unit's door or smart lock",
+    detailLabel: "Door code",
+  },
+  {
+    id: "gate_code",
+    label: "Gate code",
+    hint: "Community or garage gate code, plus your unit number",
+    detailLabel: "Gate code",
+  },
+  {
+    id: "key_location",
+    label: "Key location",
+    hint: "Lockbox location and code",
+    detailLabel: "Where the key is",
+  },
+  {
+    id: "front_desk",
+    label: "Someone lets us in",
+    hint: "A front desk or concierge, or you'll be home",
+    detailLabel: null,
+  },
 ];
 
 export function BookingForm({
@@ -61,6 +89,9 @@ export function BookingForm({
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
 
+  const detailLabel =
+    ENTRY_METHODS.find((m) => m.id === entryMethod)?.detailLabel ?? null;
+
   const quote = useMemo(
     () =>
       quoteFor({
@@ -91,16 +122,23 @@ export function BookingForm({
     setErrors({});
 
     const form = new FormData(event.currentTarget);
+
+    // FormData.get returns null for a field that is not currently rendered —
+    // the entry code disappears when someone is letting the cleaner in — and
+    // the schema's optional() accepts undefined, not null. Coercing here keeps
+    // a hidden field from failing validation against an error nobody can see.
+    const field = (name: string) => (form.get(name) as string | null) ?? "";
+
     const payload = {
-      firstName: form.get("firstName"),
-      lastName: form.get("lastName"),
-      email: form.get("email"),
-      phone: form.get("phone"),
-      line1: form.get("line1"),
-      line2: form.get("line2"),
-      city: form.get("city"),
+      firstName: field("firstName"),
+      lastName: field("lastName"),
+      email: field("email"),
+      phone: field("phone"),
+      line1: field("line1"),
+      line2: field("line2"),
+      city: field("city"),
       state: "TX",
-      postalCode: form.get("postalCode"),
+      postalCode: field("postalCode"),
       unitSize,
       plan,
       serviceType: plan === "one_time" ? serviceType : undefined,
@@ -110,9 +148,9 @@ export function BookingForm({
       preferredWeekday:
         plan === "membership" ? Number(preferredWeekday) : undefined,
       entryMethod,
-      entryDetail: form.get("entryDetail"),
-      alarmInstructions: form.get("alarmInstructions"),
-      instructions: form.get("instructions"),
+      entryDetail: field("entryDetail"),
+      alarmInstructions: field("alarmInstructions"),
+      instructions: field("instructions"),
       preferredDate: plan === "one_time" ? preferredDate : "",
       smsConsent: form.get("smsConsent") === "on",
       acceptTerms: form.get("acceptTerms") === "on",
@@ -123,7 +161,20 @@ export function BookingForm({
 
       if (!result.ok) {
         setErrors(result.fieldErrors);
-        setFormError(result.formError ?? null);
+
+        // A rejection always says something. Field errors normally render
+        // beside their input, but an error can land on a field that is not
+        // currently on screen, and then the button just appears to do
+        // nothing — which is exactly how this went unnoticed once already.
+        const issues = Object.entries(result.fieldErrors);
+        setFormError(
+          result.formError ??
+            (issues.length > 0
+              ? issues.length === 1
+                ? issues[0][1]
+                : "Please check the highlighted fields and try again."
+              : "That did not go through. Please check your details and try again."),
+        );
         window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
@@ -355,18 +406,19 @@ export function BookingForm({
               className="h-4 w-4 accent-[#1F5FA6]"
             />
             <span className="text-sm text-body">
-              There are pets in the home ({formatCents(1500)} per visit)
+              There are pets in the home (one-time {formatCents(PET_SURCHARGE_CENTS)})
             </span>
           </label>
         </Fieldset>
 
         {/* Entry */}
+        {/* The error belongs on the field itself, not repeated on the
+            fieldset — showing both renders it twice. */}
         <Fieldset
           legend="How we get in"
-          error={errors.entryDetail}
           hint="Entry details are encrypted, stored apart from the rest of your account, and shared only with the cleaner assigned to your visit on the day. Every access is logged."
         >
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {ENTRY_METHODS.map((m) => (
               <Choice
                 key={m.id}
@@ -378,12 +430,20 @@ export function BookingForm({
             ))}
           </div>
           <div className="mt-4 grid gap-4">
-            <Field
-              name="entryDetail"
-              label={ENTRY_METHODS.find((m) => m.id === entryMethod)!.label}
-              error={errors.entryDetail}
-              required
-            />
+            {/* No code to collect when someone is letting the cleaner in. */}
+            {detailLabel ? (
+              <Field
+                name="entryDetail"
+                label={detailLabel}
+                error={errors.entryDetail}
+                required
+              />
+            ) : (
+              <p className="rounded-xl bg-panel p-4 text-sm leading-relaxed text-muted">
+                Nothing needed here. Tell us below who to ask for at the desk, or
+                anything else that helps us get to your door.
+              </p>
+            )}
             <Field name="alarmInstructions" label="Alarm instructions (optional)" />
           </div>
         </Fieldset>

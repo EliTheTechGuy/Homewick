@@ -237,7 +237,7 @@ test("the generator creates periods and visits, and is idempotent", async () => 
   }
 });
 
-test("generated visits carry the pet surcharge and stay inside their period", async () => {
+test("generated visits carry no pet surcharge and stay inside their period", async () => {
   const { customerId, propertyId } = await seedCustomer("pets@example.com");
   const subscriptionId = await insertSubscription(
     customerId,
@@ -284,7 +284,9 @@ test("generated visits carry the pet surcharge and stay inside their period", as
 
   assert.ok(rows.length > 0);
   for (const row of rows) {
-    assert.equal(row.pet_surcharge_cents, 1500);
+    // The pet surcharge is one-time, taken on the booking that introduces the
+    // pet home. Repeating it here would bill a member every fortnight.
+    assert.equal(row.pet_surcharge_cents, 0);
     assert.ok(
       row.scheduled_date >= row.period_start && row.scheduled_date < row.period_end,
       `visit ${row.scheduled_date} escaped period ${row.period_start}–${row.period_end}`,

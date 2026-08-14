@@ -183,3 +183,106 @@ test("existing members are grandfathered when no change is scheduled", () => {
 test("today() returns a YYYY-MM-DD string", () => {
   assert.match(today(), /^\d{4}-\d{2}-\d{2}$/);
 });
+
+// --- Quote parity -----------------------------------------------------
+// The booking page shows a "Due today" figure and Stripe then charges one.
+// These drifted apart once already: a pet home was quoted $487.15 and
+// charged $472.15, because checkout summed only the deep clean's base rate.
+
+test("a membership quote bills every component it displays", async () => {
+  const { quoteFor } = await import("./booking-schema");
+
+  const quote = quoteFor({
+    plan: "membership",
+    unitSize: "2br_2ba",
+    addOns: ["oven"],
+    freePerk: "oven",
+    hasPets: true,
+  });
+
+  // What checkout builds its line items from, per src/actions/checkout.ts:
+  // the monthly rate, the discounted deep clean, the deep clean's pet
+  // surcharge, and any paid add-ons.
+  const monthly = 26900;
+  const deepClean = Math.round(23900 * 0.85); // 20315
+  const petSurcharge = 1500;
+  const paidAddOns = 0; // the only add-on chosen is the free perk
+
+  assert.equal(
+    quote.totalCents,
+    monthly + deepClean + petSurcharge + paidAddOns,
+    "the displayed total and the Stripe line items have drifted apart",
+  );
+  assert.equal(quote.totalCents, 48715);
+});
+
+test("a paid add-on is included in the quoted total", async () => {
+  const { quoteFor } = await import("./booking-schema");
+
+  const quote = quoteFor({
+    plan: "membership",
+    unitSize: "2br_2ba",
+    addOns: ["oven", "laundry"],
+    freePerk: "oven",
+    hasPets: false,
+  });
+
+  // Laundry is not perk-eligible, so a member pays it at 10% off: 2500 -> 2250.
+  assert.equal(quote.totalCents, 26900 + 20315 + 2250);
+});
+
+test("the pet surcharge is charged once, not on every visit", async () => {
+  const { quoteFor } = await import("./booking-schema");
+
+  const withPets = quoteFor({
+    plan: "membership",
+    unitSize: "2br_2ba",
+    addOns: [],
+    hasPets: true,
+  });
+  const withoutPets = quoteFor({
+    plan: "membership",
+    unitSize: "2br_2ba",
+    addOns: [],
+    hasPets: false,
+  });
+
+  // Exactly one surcharge on the whole signup — not one per cleaning, and not
+  // folded into the recurring monthly rate.
+  assert.equal(withPets.totalCents - withoutPets.totalCents, 1500);
+  assert.equal(
+    withPets.lines.filter((l) => l.label === "Pet home surcharge").length,
+    1,
+  );
+});
+
+test("a front-desk booking needs no entry code", async () => {
+  const { bookingSchema } = await import("./booking-schema");
+
+  const base = {
+    firstName: "Lobby", lastName: "Entry",
+    email: "lobby@example.com", phone: "2145550111",
+    line1: "900 Ross Ave", line2: "", city: "Dallas", state: "TX",
+    postalCode: "75202",
+    unitSize: "2br_2ba", plan: "one_time", serviceType: "standard",
+    addOns: [], freePerk: "", hasPets: false,
+    alarmInstructions: "", instructions: "", preferredDate: "",
+    smsConsent: false, acceptTerms: true,
+  };
+
+  // No code, because someone is letting the cleaner in.
+  const frontDesk = bookingSchema.safeParse({
+    ...base, entryMethod: "front_desk", entryDetail: "",
+  });
+  assert.equal(frontDesk.success, true);
+
+  // Choosing a code method and leaving it blank is still rejected.
+  const blankCode = bookingSchema.safeParse({
+    ...base, entryMethod: "door_code", entryDetail: "",
+  });
+  assert.equal(blankCode.success, false);
+  assert.match(
+    blankCode.error!.issues.map((i) => i.message).join(" "),
+    /Add the code/,
+  );
+});

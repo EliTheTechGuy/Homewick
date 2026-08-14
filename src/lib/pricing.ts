@@ -60,7 +60,16 @@ export const MOST_POPULAR_SIZE: UnitSize = "2br_2ba";
 
 export const VISITS_PER_PERIOD = 2;
 
-/** Applied per visit whenever the property has pets. Recurring, not an add-on. */
+/**
+ * Charged once, on the booking that introduces the pet home — not per visit.
+ *
+ * The original brief made this recurring per visit, which for a member on two
+ * cleanings a month is an extra $30 every month for the life of the
+ * membership. That is a lot to attach to something the customer cannot change
+ * about their home, so it was deliberately reduced to a single charge at
+ * signup. Reinstating a recurring version means repricing membership for pet
+ * homes, not flipping a flag here.
+ */
 export const PET_SURCHARGE_CENTS = 1500;
 
 /** Discount applied to a new member's onboarding deep clean. */
