@@ -34,7 +34,7 @@ const rules = [
   },
   {
     q: "What happens when I join?",
-    a: "Your first cleaning is a deep clean, and it is one of the two cleanings your first month already covers — not an extra charge. Your first month is also 15% off; every month after is the standard rate.",
+    a: "Your first month is 15% off, and it covers two cleanings like any other month. Every month after is the standard rate. There is nothing extra to buy at signup."
   },
   {
     q: "How do I cancel?",
