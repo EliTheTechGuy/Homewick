@@ -9,7 +9,7 @@ export function Footer() {
     <footer className="mt-24 bg-navy text-white">
       <div className="mx-auto grid max-w-6xl gap-10 px-5 py-14 md:grid-cols-[auto_1fr_1fr]">
         <div>
-          <LogoStacked className="h-24 w-auto text-white" />
+          <LogoStacked className="h-24 w-auto" reversed />
         </div>
 
         <div>

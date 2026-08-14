@@ -38,21 +38,25 @@ export default async function AdminTodayPage({
 }: {
   searchParams: Promise<{ date?: string }>;
 }) {
+  // Anyone can reach this URL, so the pre-auth states say nothing about how
+  // the deployment is configured. The specifics go to the server log.
   if (!isAdminConfigured()) {
-    return <Notice title="Admin is not configured">Set ADMIN_PASSWORD to enable it.</Notice>;
+    console.error("Admin view unavailable: ADMIN_PASSWORD is not set.");
+    return <Notice title="Unavailable">This view is not available right now.</Notice>;
   }
 
   const admin = await requireAdmin();
   if (!admin) {
     return (
       <Notice title="Sign in required">
-        This view is protected. Reload with your admin credentials.
+        This view is protected. Reload with your credentials.
       </Notice>
     );
   }
 
   if (!isDatabaseConfigured()) {
-    return <Notice title="No database">Set DATABASE_URL and run npm run db:migrate.</Notice>;
+    console.error("Admin view unavailable: DATABASE_URL is not set.");
+    return <Notice title="Unavailable">This view is not available right now.</Notice>;
   }
 
   const { date } = await searchParams;
