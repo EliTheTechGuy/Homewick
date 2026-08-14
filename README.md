@@ -191,3 +191,21 @@ These are unresolved and must not be guessed at in code.
 - **Whether the 2BR/2BA standard moves from $159 to $165.**
 - **Cancellation generosity** — current logic bills through the following
   period when notice is under 14 days.
+
+## Vercel project settings
+
+The framework is pinned in `vercel.json` rather than left to the dashboard:
+
+```json
+{ "framework": "nextjs", "buildCommand": "next build" }
+```
+
+This is not decoration. The Vercel project was created while the repository
+still held only a README, so Vercel detected no framework, set the preset to
+"Other", and kept it. Every later push then skipped `next build` entirely and
+published the `public/` directory as a static site — which deploys green, and
+serves `NOT_FOUND` on every route including the home page. `public/brand/*`
+was reachable while `/_next/*` did not exist, which is what gave it away.
+
+Pinning it in `vercel.json` means the setting lives in version control and
+cannot drift back.
