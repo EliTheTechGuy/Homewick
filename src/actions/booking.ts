@@ -133,20 +133,29 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
       const propertyId = propertyRows[0].id;
 
       // Entry details go to the encrypted table, never into general notes.
-      const entry = encryptSecret(input.entryDetail);
-      await client.query(
-        `insert into property_access_secrets
-           (property_id, gate_code_enc, door_code_enc, key_location_enc,
-            alarm_instructions_enc)
-         values ($1, $2, $3, $4, $5)`,
-        [
-          propertyId,
-          input.entryMethod === "gate_code" ? entry : null,
-          input.entryMethod === "door_code" ? entry : null,
-          input.entryMethod === "key_location" ? entry : null,
-          encryptSecret(input.alarmInstructions || null),
-        ],
-      );
+      //
+      // A front-desk booking has no code at all, so there may be nothing to
+      // store. Skip the row entirely in that case rather than writing one full
+      // of nulls — an empty secrets row would still show up in the access log
+      // as something worth revealing.
+      const entry = encryptSecret(input.entryDetail || null);
+      const alarm = encryptSecret(input.alarmInstructions || null);
+
+      if (entry || alarm) {
+        await client.query(
+          `insert into property_access_secrets
+             (property_id, gate_code_enc, door_code_enc, key_location_enc,
+              alarm_instructions_enc)
+           values ($1, $2, $3, $4, $5)`,
+          [
+            propertyId,
+            input.entryMethod === "gate_code" ? entry : null,
+            input.entryMethod === "door_code" ? entry : null,
+            input.entryMethod === "key_location" ? entry : null,
+            alarm,
+          ],
+        );
+      }
 
       // Charged once, on this booking. The subscription itself carries no pet
       // surcharge, so nothing recurring is ever derived from it.

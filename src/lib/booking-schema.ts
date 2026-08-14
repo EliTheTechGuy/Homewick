@@ -50,9 +50,14 @@ export const bookingSchema = z
     hasPets: z.boolean().default(false),
     preferredWeekday: z.coerce.number().int().min(0).max(6).optional(),
 
-    // 7. Entry — routed to the encrypted secrets table, never to notes
-    entryMethod: z.enum(["gate_code", "door_code", "key_location"]),
-    entryDetail: z.string().trim().min(1, "Tell us how we get in").max(400),
+    // 7. Entry — routed to the encrypted secrets table, never to notes.
+    //
+    // "front_desk" covers buildings where a concierge lets the cleaner up, or
+    // the customer is simply home. There is no code to give in that case, so
+    // the detail field is optional; the other three methods are the code
+    // itself, so choosing one and leaving it blank is caught below.
+    entryMethod: z.enum(["door_code", "gate_code", "key_location", "front_desk"]),
+    entryDetail: z.string().trim().max(400).optional().or(z.literal("")),
     alarmInstructions: z.string().trim().max(400).optional().or(z.literal("")),
 
     // 8. Instructions
@@ -93,6 +98,15 @@ export const bookingSchema = z
         code: "custom",
         path: ["freePerk"],
         message: "The free add-on is a membership benefit",
+      });
+    }
+    // Picking "Door code" and leaving it blank tells the cleaner nothing. The
+    // front-desk option is the way to say there is no code.
+    if (data.entryMethod !== "front_desk" && !data.entryDetail) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["entryDetail"],
+        message: "Add the code, or choose “Someone lets us in” instead",
       });
     }
   });

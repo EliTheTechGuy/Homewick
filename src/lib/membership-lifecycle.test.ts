@@ -255,3 +255,34 @@ test("the pet surcharge is charged once, not on every visit", async () => {
     1,
   );
 });
+
+test("a front-desk booking needs no entry code", async () => {
+  const { bookingSchema } = await import("./booking-schema");
+
+  const base = {
+    firstName: "Lobby", lastName: "Entry",
+    email: "lobby@example.com", phone: "2145550111",
+    line1: "900 Ross Ave", line2: "", city: "Dallas", state: "TX",
+    postalCode: "75202",
+    unitSize: "2br_2ba", plan: "one_time", serviceType: "standard",
+    addOns: [], freePerk: "", hasPets: false,
+    alarmInstructions: "", instructions: "", preferredDate: "",
+    smsConsent: false, acceptTerms: true,
+  };
+
+  // No code, because someone is letting the cleaner in.
+  const frontDesk = bookingSchema.safeParse({
+    ...base, entryMethod: "front_desk", entryDetail: "",
+  });
+  assert.equal(frontDesk.success, true);
+
+  // Choosing a code method and leaving it blank is still rejected.
+  const blankCode = bookingSchema.safeParse({
+    ...base, entryMethod: "door_code", entryDetail: "",
+  });
+  assert.equal(blankCode.success, false);
+  assert.match(
+    blankCode.error!.issues.map((i) => i.message).join(" "),
+    /Add the code/,
+  );
+});
