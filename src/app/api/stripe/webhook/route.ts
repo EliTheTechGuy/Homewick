@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { query } from "@/lib/db";
+import { query, queryOne } from "@/lib/db";
+import { TIMEZONE } from "@/lib/dates";
+import type { ServiceType, UnitSize } from "@/lib/pricing";
+import { sendOnce } from "@/lib/emails/send-once";
+import { membershipWelcomeEmail, oneTimeBookingEmail } from "@/lib/emails/templates";
 import { isStripeConfigured, stripe } from "@/lib/stripe";
 
 /**
@@ -82,6 +86,8 @@ async function handle(event: Stripe.Event): Promise<void> {
             [session.metadata.subscription_id, customerId],
           );
         }
+
+        await sendMembershipWelcome(event.id, session.metadata.subscription_id, session);
       }
 
       if (session.metadata?.kind === "one_time" && session.metadata.visit_id) {
@@ -99,6 +105,8 @@ async function handle(event: Stripe.Event): Promise<void> {
             [session.metadata.visit_id, customerId],
           );
         }
+
+        await sendOneTimeConfirmation(event.id, session.metadata.visit_id, session);
       }
       break;
     }
@@ -179,4 +187,124 @@ function subscriptionIdFrom(invoice: Stripe.Invoice): string | null {
     if (typeof fromLine === "string") return fromLine;
   }
   return null;
+}
+
+/**
+ * Confirmation email for a paid one-time booking.
+ *
+ * Sent from the webhook rather than the booking action, because the booking
+ * row exists before payment. Sending at booking time would confirm a cleaning
+ * to somebody who then abandoned checkout and was never charged.
+ *
+ * Email failure must not fail the webhook: a non-2xx makes Stripe retry, and
+ * retrying a payment we already recorded to fix an email is the wrong trade.
+ */
+async function sendOneTimeConfirmation(
+  eventId: string,
+  visitId: string,
+  session: Stripe.Checkout.Session,
+): Promise<void> {
+  try {
+    const row = await queryOne<{
+      customer_id: string;
+      first_name: string;
+      email: string;
+      service_type: ServiceType;
+      unit_size: UnitSize;
+      on_date: string;
+      line1: string;
+      line2: string | null;
+      city: string;
+      postal_code: string;
+    }>(
+      `select c.id as customer_id, c.first_name, c.email::text as email,
+              v.service_type, p.unit_size,
+              (v.scheduled_for at time zone $2)::date::text as on_date,
+              p.line1, p.line2, p.city, p.postal_code
+         from visits v
+         join customers c on c.id = v.customer_id
+         join properties p on p.id = v.property_id
+        where v.id = $1`,
+      [visitId, TIMEZONE],
+    );
+    if (!row) return;
+
+    await sendOnce({
+      eventKey: eventId,
+      kind: "one_time_booking",
+      to: row.email,
+      customerId: row.customer_id,
+      message: oneTimeBookingEmail({
+        firstName: row.first_name,
+        serviceType: row.service_type,
+        unitSize: row.unit_size,
+        onDate: row.on_date,
+        address: [row.line1, row.line2, `${row.city}, TX ${row.postal_code}`]
+          .filter(Boolean)
+          .join(", "),
+        amountCents: session.amount_total ?? 0,
+      }),
+    });
+  } catch (err) {
+    console.error(`[email] one-time confirmation failed for visit ${visitId}`, err);
+  }
+}
+
+/** Welcome email once a membership's first payment has actually gone through. */
+async function sendMembershipWelcome(
+  eventId: string,
+  subscriptionId: string,
+  session: Stripe.Checkout.Session,
+): Promise<void> {
+  try {
+    const row = await queryOne<{
+      customer_id: string;
+      first_name: string;
+      email: string;
+      unit_size: UnitSize;
+      monthly_amount_cents: number;
+      line1: string;
+      line2: string | null;
+      city: string;
+      postal_code: string;
+    }>(
+      `select c.id as customer_id, c.first_name, c.email::text as email,
+              s.unit_size, s.monthly_amount_cents,
+              p.line1, p.line2, p.city, p.postal_code
+         from subscriptions s
+         join customers c on c.id = s.customer_id
+         join properties p on p.id = s.property_id
+        where s.id = $1`,
+      [subscriptionId],
+    );
+    if (!row) return;
+
+    const visits = await query<{ on_date: string }>(
+      `select (scheduled_for at time zone $2)::date::text as on_date
+         from visits
+        where subscription_id = $1 and status = 'scheduled'
+        order by scheduled_for
+        limit 2`,
+      [subscriptionId, TIMEZONE],
+    );
+
+    await sendOnce({
+      eventKey: eventId,
+      kind: "membership_welcome",
+      to: row.email,
+      customerId: row.customer_id,
+      message: membershipWelcomeEmail({
+        firstName: row.first_name,
+        unitSize: row.unit_size,
+        monthlyAmountCents: row.monthly_amount_cents,
+        firstPaymentCents: session.amount_total ?? 0,
+        visitDates: visits.map((v) => v.on_date),
+        address: [row.line1, row.line2, `${row.city}, TX ${row.postal_code}`]
+          .filter(Boolean)
+          .join(", "),
+      }),
+    });
+  } catch (err) {
+    console.error(`[email] membership welcome failed for ${subscriptionId}`, err);
+  }
 }
