@@ -1,5 +1,5 @@
 import { query, queryOne } from "./db";
-import { TIMEZONE } from "./dates";
+import { TIMEZONE, today } from "./dates";
 import type { UnitSize } from "./pricing";
 import { cancellationEndDate } from "./membership-lifecycle";
 
@@ -47,6 +47,23 @@ export type MemberOverview = {
   claimedAddOnName: string | null;
   upcoming: UpcomingVisit[];
   hasStripeCustomer: boolean;
+  /** Where we currently clean. Null for a customer with no membership. */
+  property: {
+    id: string;
+    line1: string;
+    line2: string | null;
+    city: string;
+    state: string;
+    postalCode: string;
+    hasPets: boolean;
+    parkingNotes: string | null;
+  } | null;
+  /**
+   * A rate change already agreed but not yet charged. Members who change
+   * apartment size need to see the new price and the date it starts, or the
+   * next invoice looks like a mistake.
+   */
+  pendingRate: { amountCents: number; effectiveOn: string } | null;
 };
 
 export async function memberOverview(customerId: string): Promise<MemberOverview> {
@@ -62,13 +79,28 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
     pet_surcharge_cents: number;
     preferred_weekday: number | null;
     stripe_customer_id: string | null;
+    pending_amount_cents: number | null;
+    pending_amount_effective_on: string | null;
+    property_id: string;
+    line1: string;
+    line2: string | null;
+    city: string;
+    state: string;
+    postal_code: string;
+    has_pets: boolean;
+    parking_notes: string | null;
   }>(
     `select s.id, s.status::text as status, s.monthly_amount_cents, s.unit_size,
             s.ends_on::text as ends_on, s.started_on::text as started_on,
             s.billing_day, s.visits_per_period, s.pet_surcharge_cents,
-            s.preferred_weekday, c.stripe_customer_id
+            s.preferred_weekday, c.stripe_customer_id,
+            s.pending_amount_cents,
+            s.pending_amount_effective_on::text as pending_amount_effective_on,
+            p.id as property_id, p.line1, p.line2, p.city, p.state,
+            p.postal_code, p.has_pets, p.parking_notes
        from subscriptions s
        join customers c on c.id = s.customer_id
+       join properties p on p.id = s.property_id
       where s.customer_id = $1 and s.status <> 'canceled'
       order by s.created_at desc
       limit 1`,
@@ -114,6 +146,8 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
         periodEndsOn: v.period_end,
       })),
       hasStripeCustomer: false,
+      property: null,
+      pendingRate: null,
     };
   }
 
@@ -159,11 +193,22 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
       )
     : null;
 
+  // A scheduled rate change stops being "pending" once its date arrives, but
+  // monthly_amount_cents keeps the old figure, since the period ledger reads
+  // the pending column instead. Resolving it here means the member is never
+  // shown a price they have already stopped paying.
+  const rateChangeLive =
+    sub.pending_amount_cents !== null &&
+    sub.pending_amount_effective_on !== null &&
+    sub.pending_amount_effective_on <= today();
+
   return {
     subscription: {
       id: sub.id,
       status: sub.status,
-      monthlyAmountCents: sub.monthly_amount_cents,
+      monthlyAmountCents: rateChangeLive
+        ? sub.pending_amount_cents!
+        : sub.monthly_amount_cents,
       unitSize: sub.unit_size,
       endsOn: sub.ends_on,
       wouldEndOn: cancellationEndDate({
@@ -204,5 +249,24 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
       periodEndsOn: v.period_end,
     })),
     hasStripeCustomer: Boolean(sub.stripe_customer_id),
+    property: {
+      id: sub.property_id,
+      line1: sub.line1,
+      line2: sub.line2,
+      city: sub.city,
+      state: sub.state,
+      postalCode: sub.postal_code,
+      hasPets: sub.has_pets,
+      parkingNotes: sub.parking_notes,
+    },
+    pendingRate:
+      !rateChangeLive &&
+      sub.pending_amount_cents !== null &&
+      sub.pending_amount_effective_on !== null
+        ? {
+            amountCents: sub.pending_amount_cents,
+            effectiveOn: sub.pending_amount_effective_on,
+          }
+        : null,
   };
 }

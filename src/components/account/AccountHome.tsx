@@ -14,6 +14,7 @@ import type { MemberOverview } from "@/lib/member-account";
 import type { Member } from "@/lib/member-auth";
 import { Card } from "@/components/ui";
 import { RescheduleVisit } from "./RescheduleVisit";
+import { ProfileSection } from "./ProfileSection";
 
 export function AccountHome({
   member,
@@ -194,6 +195,9 @@ export function AccountHome({
           usual day from then on.
         </p>
       </Card>
+
+      {/* Address and membership size */}
+      <ProfileSection overview={overview} />
 
       {/* Billing */}
       <Card className="mt-6">
