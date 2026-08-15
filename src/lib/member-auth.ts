@@ -17,7 +17,11 @@ import { query, queryOne, transaction } from "./db";
 export const SESSION_COOKIE = "hw_member";
 
 /** Long enough that a member picking an add-on monthly is rarely signed out. */
+/** How long a session stays valid after it was last used, not after sign-in. */
 const SESSION_DAYS = 30;
+
+/** Browsers cap persistent cookies at 400 days; the session row is authoritative. */
+const COOKIE_DAYS = 400;
 
 /** Short enough that a forwarded or logged link is not a standing key. */
 const LINK_MINUTES = 15;
@@ -147,10 +151,24 @@ export async function currentMember(): Promise<Member | null> {
 
   if (!row) return null;
 
-  // Cheap liveness marker; useful when someone asks "was this account used?"
-  void query(`update member_sessions set last_seen_at = now() where id = $1`, [
-    row.session_id,
-  ]).catch(() => {});
+  // Sliding expiry. A member who uses the account every week should never be
+  // asked to sign in again, while someone who drifts away for a month is
+  // logged out. A fixed window from sign-in would evict the regulars too, and
+  // being made to fetch a fresh link for no reason is the one part of
+  // passwordless that feels worse than a password.
+  //
+  // The predicate does the throttling, so this writes at most once a day per
+  // session rather than on every page load. Awaited rather than fired and
+  // forgotten, because a serverless function can be frozen the instant it
+  // responds and drop an in-flight query along with its pooled connection.
+  await query(
+    `update member_sessions
+        set last_seen_at = now(),
+            expires_at = now() + ($2 || ' days')::interval
+      where id = $1
+        and last_seen_at < now() - interval '1 day'`,
+    [row.session_id, String(SESSION_DAYS)],
+  ).catch(() => {});
 
   return {
     customerId: row.customer_id,
@@ -175,7 +193,13 @@ export function sessionCookieOptions() {
     sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: SESSION_DAYS * 24 * 60 * 60,
+    // Deliberately far longer than SESSION_DAYS. The database row is what
+    // actually authorises a request, and it slides forward on use, so the
+    // cookie only has to outlive it. Capping the cookie at 30 days instead
+    // would evict a weekly visitor on day 30 no matter how recently they
+    // were here, which is the exact thing the sliding expiry exists to stop.
+    // A cookie whose row has expired or been deleted is an inert string.
+    maxAge: COOKIE_DAYS * 24 * 60 * 60,
   };
 }
 
