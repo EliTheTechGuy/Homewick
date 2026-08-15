@@ -11,8 +11,7 @@ import type { Composed } from "./templates";
  * exists, another delivery of the same event got there first and we stop.
  *
  * Claiming before sending rather than after means a crash mid-send loses an
- * email rather than sending two. For a welcome that is the better failure —
- * a missing one is a support question, a duplicate looks like a double charge.
+ * email rather than sending two. For a welcome that is the better failure, * a missing one is a support question, a duplicate looks like a double charge.
  */
 export async function sendOnce(params: {
   eventKey: string;

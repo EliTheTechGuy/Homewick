@@ -7,7 +7,7 @@ import { SERVICE_TYPES } from "@/lib/pricing";
 export const metadata: Metadata = {
   title: "Services",
   description:
-    "Standard, deep, and move-out apartment cleaning in the Dallas–Fort Worth metroplex, with flat published pricing.",
+    "Standard, deep, and move-out apartment cleaning in the Dallas-Fort Worth metroplex, with flat published pricing.",
 };
 
 const included = {
@@ -25,7 +25,7 @@ const included = {
     "Floors washed",
   ],
   "Bedrooms & living areas": [
-    "Bed linens changed — included on every clean",
+    "Bed linens changed, included on every clean",
     "Surfaces dusted, including sills and reachable ledges",
     "Floors vacuumed and hard floors mopped",
     "Mirrors and glass",

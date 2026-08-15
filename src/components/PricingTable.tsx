@@ -33,7 +33,7 @@ export function PricingTable({ className = "" }: { className?: string }) {
         </table>
       </div>
       <p className="mt-5 text-sm leading-relaxed text-muted">
-        Bed linens changed free with every clean. Launch pricing — rates are reviewed
+        Bed linens changed free with every clean. These are launch prices, and rates are reviewed
         annually with 30 days&apos; written notice. Houses are quoted separately by square
         footage.
       </p>

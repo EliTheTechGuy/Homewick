@@ -16,7 +16,7 @@ import {
  *
  * Membership uses subscription mode so Stripe Billing owns the recurring
  * charge, proration, and dunning. The onboarding deep clean rides along as a
- * one-off line item — it is billed separately from the monthly rate rather
+ * one-off line item, it is billed separately from the monthly rate rather
  * than folded into the first month.
  */
 export async function createCheckoutSession(
@@ -24,7 +24,7 @@ export async function createCheckoutSession(
   kind: "membership" | "one_time",
 ): Promise<{ url: string } | { error: string }> {
   // The booking row already exists by the time we get here, so the customer
-  // must not be sent back to the form — they would submit it a second time.
+  // must not be sent back to the form, they would submit it a second time.
   // Instead they go to the confirmation page, which says plainly that payment
   // is outstanding. Silently showing the ordinary "Booking received" page put
   // an unpaid visit on the calendar and told the customer they were done.
@@ -74,7 +74,7 @@ async function firstMonthCoupon(): Promise<string> {
       id,
       percent_off: MEMBER_FIRST_MONTH_DISCOUNT * 100,
       duration: "once",
-      name: "New member — first month",
+      name: "New member, first month",
     });
     return id;
   }
@@ -95,7 +95,7 @@ async function membershipSession(subscriptionId: string) {
 
   // The one-time pet surcharge rides on the member's first cleaning, which is
   // their onboarding deep clean. Every chargeable component is read back, not
-  // just the headline rate — reading only the base once quoted a pet home
+  // just the headline rate, reading only the base once quoted a pet home
   // $487.15 and charged $472.15.
   const firstVisit = await queryOne<{ pet_surcharge_cents: number }>(
     `select pet_surcharge_cents from visits
@@ -123,7 +123,7 @@ async function membershipSession(subscriptionId: string) {
         unit_amount: row.monthly_amount_cents,
         recurring: { interval: "month" },
         product_data: {
-          name: `Homewick Membership — ${unitSizeLabel(row.unit_size)}`,
+          name: `Homewick Membership, ${unitSizeLabel(row.unit_size)}`,
           description: "Two cleanings per billing period, one free add-on each period.",
         },
       },
@@ -157,7 +157,7 @@ async function membershipSession(subscriptionId: string) {
     line_items: lineItems,
     // The first month is discounted; every month after is the full rate. A
     // once-duration coupon is how Stripe expresses that, and it keeps the
-    // recurring price honest — the subscription really is $269/month, so a
+    // recurring price honest, the subscription really is $269/month, so a
     // rate change later does not have to unpick a bespoke first invoice.
     discounts: [{ coupon: await firstMonthCoupon() }],
     customer: row.stripe_customer_id ?? undefined,
@@ -203,7 +203,7 @@ async function oneOffSession(visitId: string) {
         price_data: {
           currency: "usd",
           unit_amount: total,
-          product_data: { name: "Homewick Cleaning — one-time visit" },
+          product_data: { name: "Homewick Cleaning, one-time visit" },
         },
       },
     ],

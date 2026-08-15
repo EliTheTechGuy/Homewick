@@ -18,7 +18,7 @@ export type RevealResult =
 /**
  * Decrypts a property's entry details.
  *
- * Two rules hold here. Reads are restricted to the day of service — an entry
+ * Two rules hold here. Reads are restricted to the day of service, an entry
  * code is not general reference data, it is a key that is only needed when
  * someone is standing at the door. And every read is written to
  * access_reveals before the plaintext is returned, so there is an audit trail

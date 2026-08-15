@@ -21,7 +21,7 @@ import { timestamptzFromLocal, transaction } from "./db";
  *
  *   - `subscription_periods` is the entitlement ledger. Two cleanings and one
  *     free add-on belong to a *period*, not to a calendar month, so counting
- *     visits by date range at query time is not equivalent — it gets February
+ *     visits by date range at query time is not equivalent, it gets February
  *     wrong and breaks on mid-month signups.
  *
  *   - Nothing is a delete. Cancellation is a state with an end date, and
@@ -71,7 +71,7 @@ export type Period = {
 
 /**
  * The period boundaries are anchored to billing_day, which the schema
- * constrains to 1–28. Anchoring to the 29th–31st inherits every February bug
+ * constrains to 1 to 28. Anchoring to the 29th to 31st inherits every February bug
  * there is, so the constraint is doing real work and this code relies on it.
  */
 export function periodContaining(sub: SubscriptionRow, date: ISODate): Period {
@@ -132,7 +132,7 @@ export function periodsToGenerate(
  *
  * The first falls on the member's preferred weekday; the second follows two
  * weeks later. If that would spill past the period boundary it is pulled back
- * to a week — a visit may not cross into the next period, because that is
+ * to a week, a visit may not cross into the next period, because that is
  * rollover through the back door.
  */
 export function visitDatesForPeriod(
@@ -160,7 +160,7 @@ export function visitDatesForPeriod(
     if (!isBefore(candidate, period.end)) {
       candidate = addDays(first, i * 7);
     }
-    // Still outside the period (very short period, or an odd config) — skip it
+    // Still outside the period (very short period, or an odd config), skip it
     // rather than silently placing a visit the member is not entitled to.
     if (!isBefore(candidate, period.end)) continue;
     dates.push(candidate);
@@ -278,7 +278,7 @@ export async function generateForSubscription(
 /**
  * A scheduled rate change swaps in at the first period starting on or after
  * its effective date. Until then the member keeps the rate snapshotted on
- * their subscription — which is what grandfathers early members.
+ * their subscription, which is what grandfathers early members.
  */
 export function rateForPeriod(sub: SubscriptionRow, period: Period): number {
   if (
@@ -372,7 +372,7 @@ export async function claimFreePerk(
  * With 14+ days left in the current period, service ends at that period's
  * end. Otherwise it runs through the following period. Either way the
  * subscription moves to `pending_cancellation` and keeps generating visits
- * until `ends_on` — it is never deleted.
+ * until `ends_on`, it is never deleted.
  */
 export function cancellationEndDate(
   sub: SubscriptionRow,

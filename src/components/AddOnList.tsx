@@ -37,7 +37,7 @@ export function AddOnList({ className = "" }: { className?: string }) {
         </div>
       </dl>
       <p className="mt-6 text-sm text-muted">
-        Laundry is performed at the customer&apos;s own risk — see the service agreement.
+        Laundry is performed at the customer&apos;s own risk. See the service agreement.
       </p>
     </div>
   );

@@ -58,7 +58,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
     // the logs. Naming environment variables on a public page tells a visitor
     // nothing useful and tells everyone else how the deployment is wired.
     console.error(
-      "Booking rejected: missing configuration —",
+      "Booking rejected, missing configuration:",
       [
         !isDatabaseConfigured() && "DATABASE_URL",
         !isSecretKeyConfigured() && "ACCESS_SECRET_KEY",
@@ -70,7 +70,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
       ok: false,
       fieldErrors: {},
       formError:
-        "Online booking is temporarily unavailable. Nothing has been charged — please try again shortly.",
+        "Online booking is temporarily unavailable. Nothing has been charged, so please try again shortly.",
     };
   }
 
@@ -85,7 +85,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
 
   try {
     const bookingRef = await transaction(async (client) => {
-      // Customer — a repeat booker keeps their existing record.
+      // Customer, a repeat booker keeps their existing record.
       const { rows: customerRows } = await client.query<{ id: string }>(
         `insert into customers (first_name, last_name, email, phone, sms_consent_at)
          values ($1, $2, $3, $4, $5)
@@ -106,7 +106,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
       );
       const customerId = customerRows[0].id;
 
-      // Terms acceptance — version, timestamp, IP, and agent, as evidence.
+      // Terms acceptance, version, timestamp, IP, and agent, as evidence.
       await client.query(
         `insert into service_agreements (customer_id, version, ip_address, user_agent)
          values ($1, $2, $3, $4)`,
@@ -136,7 +136,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
       //
       // A front-desk booking has no code at all, so there may be nothing to
       // store. Skip the row entirely in that case rather than writing one full
-      // of nulls — an empty secrets row would still show up in the access log
+      // of nulls, an empty secrets row would still show up in the access log
       // as something worth revealing.
       const entry = encryptSecret(input.entryDetail || null);
       const alarm = encryptSecret(input.alarmInstructions || null);
@@ -176,7 +176,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
             customerId,
             propertyId,
             input.unitSize,
-            // Snapshotted, not looked up — this is what grandfathers the rate.
+            // Snapshotted, not looked up, this is what grandfathers the rate.
             MEMBERSHIP_PRICES[input.unitSize].monthlyCents,
             VISITS_PER_PERIOD,
             // Zero: the pet surcharge is one-time and sits on the onboarding
@@ -208,7 +208,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
 
         // A new member's first cleaning is booked as a deep clean so the
         // cleaner's assignment reflects the work involved. This is operational
-        // only — a member buys "cleanings", and the deep/standard split is
+        // only, a member buys "cleanings", and the deep/standard split is
         // never surfaced to them in pricing, the booking form, or the terms.
         // Do not add it to customer-facing copy.
         //
@@ -274,7 +274,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
       ok: false,
       fieldErrors: {},
       formError:
-        "Something went wrong saving your booking. Nothing was charged — please try again.",
+        "Something went wrong saving your booking. Nothing was charged, so please try again.",
     };
   }
 }

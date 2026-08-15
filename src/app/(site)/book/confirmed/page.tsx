@@ -10,8 +10,8 @@ export const metadata: Metadata = {
  * Two outcomes land here.
  *
  * The ordinary one is a customer returning from Stripe, having paid. The other
- * is a booking that saved but whose payment could not be started — Stripe
- * unreachable, or not configured. That second case must not be dressed up as
+ * is a booking that saved but whose payment could not be started, because
+ * Stripe was unreachable or not configured. That second case must not be dressed up as
  * the first: the customer would walk away believing they were booked and paid,
  * and the visit would sit on the calendar unpaid with nobody aware of it.
  */
@@ -27,7 +27,7 @@ export default async function ConfirmedPage({
     <Section>
       <div className="max-w-2xl">
         <h1 className="text-3xl font-semibold text-navy md:text-4xl">
-          {paymentPending ? "Booking saved — payment still to do" : "Booking received"}
+          {paymentPending ? "Booking saved, payment still to do" : "Booking received"}
         </h1>
 
         {paymentPending ? (
@@ -37,7 +37,7 @@ export default async function ConfirmedPage({
               the payment step just now, so <strong>nothing has been charged</strong>.
             </p>
             <p className="mt-4 leading-relaxed text-muted">
-              You do not need to book again — that would create a second visit. We
+              You do not need to book again. That would create a second visit. We
               will contact you to take payment and confirm the date.
               {site.email && (
                 <>

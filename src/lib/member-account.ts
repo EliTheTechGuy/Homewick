@@ -112,7 +112,7 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
   );
 
   // A perk has to land on a visit that has not happened yet, inside this
-  // period — claiming it against a completed clean would be meaningless.
+  // period, claiming it against a completed clean would be meaningless.
   const claimable = period
     ? await queryOne<{ id: string }>(
         `select id from visits

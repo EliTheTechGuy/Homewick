@@ -193,7 +193,7 @@ export function AccountHome({
           {pending ? "Opening…" : "Manage card and invoices"}
         </button>
         <p className="mt-4 text-sm leading-relaxed text-muted">
-          To cancel, get in touch — membership needs 14 days&apos; notice, and we will
+          To cancel, get in touch. Membership needs 14 days&apos; notice, and we will
           confirm your end date so nothing already booked is lost.
         </p>
       </Card>

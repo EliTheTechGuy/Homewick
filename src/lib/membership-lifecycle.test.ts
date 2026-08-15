@@ -202,7 +202,7 @@ test("a membership quote bills every component it displays", async () => {
 
   // What checkout builds its line items from: the monthly rate with the
   // first-month discount applied, the one-time pet surcharge, and paid add-ons.
-  // There is deliberately no separate deep-clean charge — the deep clean is one
+  // There is deliberately no separate deep-clean charge, the deep clean is one
   // of the two cleanings the first month already pays for.
   const firstMonth = Math.round(26900 * 0.85); // 22865
   const petSurcharge = 1500;
@@ -247,7 +247,7 @@ test("the pet surcharge is charged once, not on every visit", async () => {
     hasPets: false,
   });
 
-  // Exactly one surcharge on the whole signup — not one per cleaning, and not
+  // Exactly one surcharge on the whole signup, not one per cleaning, and not
   // folded into the recurring monthly rate.
   assert.equal(withPets.totalCents - withoutPets.totalCents, 1500);
   assert.equal(

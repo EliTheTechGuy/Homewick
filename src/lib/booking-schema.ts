@@ -50,7 +50,7 @@ export const bookingSchema = z
     hasPets: z.boolean().default(false),
     preferredWeekday: z.coerce.number().int().min(0).max(6).optional(),
 
-    // 7. Entry — routed to the encrypted secrets table, never to notes.
+    // 7. Entry, routed to the encrypted secrets table, never to notes.
     //
     // "front_desk" covers buildings where a concierge lets the cleaner up, or
     // the customer is simply home. There is no code to give in that case, so
@@ -124,7 +124,7 @@ const SERVICE_LINE_LABELS: Record<"standard" | "deep" | "move_out", string> = {
  *
  * Membership signups are billed as the monthly rate plus the discounted
  * onboarding deep clean, which is charged separately rather than folded into
- * the first month — the monthly price stays what the site says it is.
+ * the first month, the monthly price stays what the site says it is.
  */
 export type QuoteParams = {
   plan: "one_time" | "membership";
@@ -151,7 +151,7 @@ export function quoteFor(input: QuoteParams): Quote {
   if (input.plan === "membership") {
     // A member pays the membership price and nothing else. The onboarding deep
     // clean is one of the first month's two cleanings, not a second charge on
-    // top — billing both charged twice for the same month of service.
+    // top, billing both charged twice for the same month of service.
     lines.push({
       label: "Membership, first month (15% off)",
       amountCents: firstMonthCents(input.unitSize),

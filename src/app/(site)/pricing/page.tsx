@@ -7,7 +7,7 @@ import { AddOnList } from "@/components/AddOnList";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "Flat published pricing for apartment cleaning in Dallas–Fort Worth. One-time and membership rates by apartment size.",
+    "Flat published pricing for apartment cleaning in Dallas-Fort Worth. One-time and membership rates by apartment size.",
 };
 
 export default function PricingPage() {

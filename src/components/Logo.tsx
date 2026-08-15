@@ -1,7 +1,7 @@
 /**
  * The Homewick lockups, reproduced exactly from the supplied brand artwork
  * (homewick-logo-horizontal-white.svg, homewick-logo-stacked-white.svg,
- * homewick-icon-white.svg — kept in public/brand for print and hand-off).
+ * homewick-icon-white.svg, kept in public/brand for print and hand-off).
  *
  * Geometry, type sizes, weights, and letter-spacing match those files
  * character for character. Do not "improve" the spacing here: an earlier
@@ -56,7 +56,7 @@ export function LogoHorizontal({ className = "" }: { className?: string }) {
 /**
  * Stacked lockup: chevron over wordmark over pill.
  *
- * `reversed` flips it for dark surfaces — the navy wordmark is invisible on
+ * `reversed` flips it for dark surfaces. The navy wordmark is invisible on
  * the navy footer, so it goes white and the pill inverts with it.
  */
 export function LogoStacked({
@@ -114,8 +114,8 @@ export function LogoStacked({
 }
 
 /**
- * Chevron only, in a rounded tile. Used below roughly 32px — the H competes
- * with the chevron at small sizes, so the wordmark is dropped rather than
+ * Chevron only, in a rounded tile. Used below roughly 32px, because the H
+ * competes with the chevron at small sizes, so the wordmark is dropped rather than
  * shrunk into mush.
  */
 export function LogoMark({ className = "" }: { className?: string }) {

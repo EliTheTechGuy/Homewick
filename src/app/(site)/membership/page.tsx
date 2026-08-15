@@ -26,7 +26,7 @@ const rules = [
   },
   {
     q: "Can I move a visit into next month?",
-    a: "No — rescheduling stays within the billing period it belongs to. Moving a visit across periods would be rollover by another name.",
+    a: "No. Rescheduling stays within the billing period it belongs to, because moving a visit across periods would be rollover by another name.",
   },
   {
     q: "How does the free add-on work?",
@@ -42,11 +42,11 @@ const rules = [
   },
   {
     q: "Will my rate change?",
-    a: "Rates are reviewed once a year with 30 days' written notice before any change takes effect. Your rate is fixed to your subscription when you sign up — raising the published price does not reprice existing members.",
+    a: "Rates are reviewed once a year with 30 days' written notice before any change takes effect. Your rate is fixed to your subscription when you sign up, so raising the published price does not reprice existing members.",
   },
   {
     q: "I have pets.",
-    a: `A one-time ${formatCents(PET_SURCHARGE_CENTS)} surcharge applies when there are pets in the home. It is charged once, on your first booking — not on every clean.`,
+    a: `A one-time ${formatCents(PET_SURCHARGE_CENTS)} surcharge applies when there are pets in the home. It is charged once, on your first booking, and never on later cleans.`,
   },
 ];
 
@@ -57,7 +57,7 @@ export default function MembershipPage() {
         <SectionHeading
           eyebrow="Membership"
           title="Two cleanings every month, one simple charge."
-          lead="Membership is the cheapest way to use Homewick and the reason the service stays consistent — the same apartment, the same standard, on a rhythm."
+          lead="Membership is the cheapest way to use Homewick, and the reason the service stays consistent. The same apartment, the same standard, on a rhythm."
         />
         <MembershipCards className="mt-12" />
       </Section>

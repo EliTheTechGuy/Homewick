@@ -29,8 +29,8 @@ export function SignInForm({ linkExpired = false }: { linkExpired?: boolean }) {
 
       {linkExpired && (
         <p className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          That sign-in link has expired or was already used. Links last 15 minutes — ask
-          for a fresh one below.
+          That sign-in link has expired or was already used. Links last 15 minutes, so
+          ask for a fresh one below.
         </p>
       )}
 
@@ -75,7 +75,7 @@ export function SignInForm({ linkExpired = false }: { linkExpired?: boolean }) {
       )}
 
       <p className="mt-8 text-sm leading-relaxed text-muted">
-        Accounts are created when you book — there is nothing separate to sign up for. If
+        Accounts are created when you book, so there is nothing separate to sign up for. If
         the email does not arrive, check your spam folder.
       </p>
     </div>

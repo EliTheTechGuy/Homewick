@@ -29,7 +29,7 @@ export function RevealAccess({
     return (
       <div className="rounded-xl border border-accent bg-accent/5 p-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-accent">
-          Entry details — this reveal was logged
+          Entry details, and this reveal was logged
         </p>
         <dl className="mt-2 space-y-1">
           {entries.map(([label, value]) => (
