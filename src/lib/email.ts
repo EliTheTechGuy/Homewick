@@ -16,6 +16,8 @@ export async function sendEmail(params: {
   to: string;
   subject: string;
   text: string;
+  /** Optional; clients that cannot render it fall back to `text`. */
+  html?: string;
 }): Promise<{ delivered: boolean }> {
   if (!isEmailConfigured()) {
     console.warn(
@@ -37,6 +39,7 @@ export async function sendEmail(params: {
         to: [params.to],
         subject: params.subject,
         text: params.text,
+        ...(params.html ? { html: params.html } : {}),
         // No reply-to header on purpose. This address does not take mail, and
         // the message says so — pointing replies somewhere they are not read
         // would be worse than telling people plainly not to reply.
