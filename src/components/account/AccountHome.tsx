@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { chooseFreeAddOn, openBillingPortal, signOut } from "@/actions/account";
+import {
+  cancelMembership,
+  chooseFreeAddOn,
+  openBillingPortal,
+  signOut,
+} from "@/actions/account";
 import { formatLong } from "@/lib/dates";
 import { formatCents } from "@/lib/money";
 import { FREE_PERK_ELIGIBLE, unitSizeLabel } from "@/lib/pricing";
@@ -19,6 +24,7 @@ export function AccountHome({
   const [pending, startTransition] = useTransition();
   const [notice, setNotice] = useState<{ ok: boolean; message: string } | null>(null);
   const [choice, setChoice] = useState("");
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
 
   const { subscription, currentPeriod, upcoming } = overview;
   const perkAvailable =
@@ -28,6 +34,15 @@ export function AccountHome({
     if (!choice) return;
     setNotice(null);
     startTransition(async () => setNotice(await chooseFreeAddOn(choice)));
+  }
+
+  function cancel() {
+    setNotice(null);
+    startTransition(async () => {
+      const result = await cancelMembership();
+      setNotice(result);
+      if (result.ok) setConfirmingCancel(false);
+    });
   }
 
   function billing() {
@@ -192,11 +207,55 @@ export function AccountHome({
         >
           {pending ? "Opening…" : "Manage card and invoices"}
         </button>
-        <p className="mt-4 text-sm leading-relaxed text-muted">
-          To cancel, get in touch. Membership needs 14 days&apos; notice, and we will
-          confirm your end date so nothing already booked is lost.
-        </p>
       </Card>
+
+      {/* Cancelling */}
+      {subscription && subscription.status !== "pending_cancellation" && (
+        <Card className="mt-6">
+          <h2 className="text-lg font-semibold text-navy">Cancel membership</h2>
+          <p className="mt-2 text-sm leading-relaxed text-muted">
+            Membership needs 14 days&apos; notice. Based on where you are in your
+            billing period, cancelling now would end your membership on{" "}
+            <strong className="text-navy">{formatLong(subscription.wouldEndOn)}</strong>.
+            Cleanings booked before then still go ahead, and you will not be charged
+            again.
+          </p>
+
+          {confirmingCancel ? (
+            <div className="mt-4 rounded-xl border border-hairline bg-panel p-4">
+              <p className="text-sm font-medium text-navy">
+                Cancel your membership on {formatLong(subscription.wouldEndOn)}?
+              </p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={cancel}
+                  disabled={pending}
+                  className="rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-dark disabled:opacity-50"
+                >
+                  {pending ? "Cancelling…" : "Yes, cancel it"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingCancel(false)}
+                  disabled={pending}
+                  className="rounded-full border border-hairline px-5 py-2.5 text-sm font-semibold text-body"
+                >
+                  Keep my membership
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmingCancel(true)}
+              className="mt-4 text-sm font-medium text-accent hover:underline"
+            >
+              Cancel my membership
+            </button>
+          )}
+        </Card>
+      )}
     </div>
   );
 }
