@@ -21,7 +21,7 @@ export async function sendEmail(params: {
 }): Promise<{ delivered: boolean }> {
   if (!isEmailConfigured()) {
     console.warn(
-      `[email] RESEND_API_KEY/EMAIL_FROM not set — not sending.\n` +
+      `[email] RESEND_API_KEY/EMAIL_FROM not set, not sending.\n` +
         `  to: ${params.to}\n  subject: ${params.subject}\n${params.text}`,
     );
     return { delivered: false };
@@ -41,7 +41,7 @@ export async function sendEmail(params: {
         text: params.text,
         ...(params.html ? { html: params.html } : {}),
         // No reply-to header on purpose. This address does not take mail, and
-        // the message says so — pointing replies somewhere they are not read
+        // the message says so. Pointing replies somewhere they are not read
         // would be worse than telling people plainly not to reply.
       }),
     });
@@ -66,7 +66,7 @@ export function signInEmail(url: string): { subject: string; text: string } {
       url,
       "",
       "It works once and expires in 15 minutes.",
-      "If you did not ask for this, you can ignore it — nothing has changed.",
+      "If you did not ask for this, you can ignore it. Nothing has changed.",
       "",
       "---",
       "This address does not receive mail, so please do not reply.",

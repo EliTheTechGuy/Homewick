@@ -41,10 +41,18 @@ export async function sendOnce(params: {
     html: params.message.html,
   });
 
-  await queryOne(`update email_deliveries set delivered = $2 where id = $1 returning id`, [
+  if (!delivered) {
+    // Release the claim. Nothing was sent, so a later run should be free to
+    // try again. Keeping it would turn one bad minute at the mail provider
+    // into a reminder that is never sent at all, and the same applies to a
+    // developer running this with no provider configured.
+    await queryOne(`delete from email_deliveries where id = $1 returning id`, [claim.id]);
+    return { sent: false, reason: "not_delivered" };
+  }
+
+  await queryOne(`update email_deliveries set delivered = true where id = $1 returning id`, [
     claim.id,
-    delivered,
   ]);
 
-  return delivered ? { sent: true } : { sent: false, reason: "not_delivered" };
+  return { sent: true };
 }

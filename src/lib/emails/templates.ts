@@ -49,6 +49,66 @@ export function oneTimeBookingEmail(params: {
 }
 
 /**
+ * The day before a cleaning.
+ *
+ * Sent to everyone, member or not. The job it does is practical rather than
+ * promotional: a visit nobody remembered is a visit where access fails, and a
+ * wasted trip costs a cleaner's time whether or not the customer was at fault.
+ */
+export function visitReminderEmail(params: {
+  firstName: string;
+  onDate: ISODate;
+  address: string;
+  freeAddOnName: string | null;
+}): Composed {
+  const rows: Row[] = [
+    { label: "Tomorrow", value: formatLong(params.onDate) },
+    { label: "Where", value: params.address },
+  ];
+
+  if (params.freeAddOnName) {
+    rows.push({ label: "Included this visit", value: params.freeAddOnName });
+  }
+
+  return compose({
+    subject: `Your cleaning is tomorrow, ${formatLong(params.onDate)}`,
+    heading: "Your cleaning is tomorrow",
+    intro: `Hi ${params.firstName}. A quick reminder so nothing catches you out tomorrow.`,
+    rows,
+    body: [
+      "Please make sure we can get in, and that the entry details you gave us are still current. If a code has changed, let us know today.",
+      "It helps if floors are clear of anything that needs putting away first, though we will work around whatever is there.",
+    ],
+    footerNote:
+      "Need to move this one? Get in touch today and we will find another slot.",
+  });
+}
+
+/**
+ * A nudge, a couple of days into each billing period, when the free add-on is
+ * still unclaimed.
+ *
+ * Without it almost nobody claims the perk, because claiming requires
+ * remembering that it exists. That turns a benefit you are paying for into one
+ * the member never feels, which is the worst of both.
+ */
+export function freeAddOnNudgeEmail(params: {
+  firstName: string;
+  nextVisitDate: ISODate;
+}): Composed {
+  return compose({
+    subject: "Your free add-on this month",
+    heading: "Pick your free add-on",
+    intro: `Hi ${params.firstName}. Your free add-on for this month is still waiting, and your next cleaning is ${formatLong(params.nextVisitDate)}.`,
+    body: [
+      "Choose one extra job at no cost. Inside the oven, inside the fridge, interior windows, or the balcony.",
+      "It takes a moment, and picking it now means your cleaner arrives knowing to do it. It resets at the start of each month and does not carry over.",
+    ],
+    cta: { label: "Choose my free add-on", url: `${site.url}/account` },
+  });
+}
+
+/**
  * Membership started, first payment taken.
  *
  * This is the email that has to earn the subscription. It explains the three
@@ -82,12 +142,12 @@ export function membershipWelcomeEmail(params: {
       "Your membership is active and your first cleanings are booked. One charge a month, two cleanings, nothing to arrange in between.",
     rows,
     body: [
-      "<strong>Your free add-on.</strong> Every month you can add one extra job — inside the oven, the fridge, interior windows, or the balcony — at no cost. It is not automatic: choose it in your account so it reaches your cleaner as part of the job.",
+      "<strong>Your free add-on.</strong> Every month you can add one extra job at no cost. Inside the oven, the fridge, interior windows, or the balcony. It is not automatic, so choose it in your account and it will reach your cleaner as part of the job.",
       "It resets each month and does not carry over, so it is worth picking one each time.",
       "Two cleanings a month, roughly a fortnight apart, on the weekday you chose. Need to move one? Get in touch and we will shift it within the month.",
     ],
     cta: { label: "Choose this month's free add-on", url: `${site.url}/account` },
     footerNote:
-      "Receipts and card changes are handled by Stripe. To cancel, get in touch — membership needs 14 days' notice and we will confirm your end date.",
+      "Receipts and card changes are handled by Stripe. To cancel, get in touch. Membership needs 14 days' notice and we will confirm your end date.",
   });
 }

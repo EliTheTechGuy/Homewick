@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { generateUpcomingVisits } from "@/lib/membership-lifecycle";
+import { sendScheduledEmails } from "@/lib/emails/scheduled";
 import { isDatabaseConfigured } from "@/lib/db";
 
 /**
  * The daily job: top up billing periods and scheduled visits for every live
- * subscription. It is idempotent, so running it twice in a day is harmless —
- * which matters, because retries and manual runs both happen.
+ * subscription. It is idempotent, so running it twice in a day is harmless,
+ * which matters because retries and manual runs both happen.
  *
  * Wired to Vercel Cron via vercel.json.
  */
@@ -28,8 +29,19 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await generateUpcomingVisits();
-    return NextResponse.json({ ok: true, ...result });
+    const generated = await generateUpcomingVisits();
+
+    // Email runs after generation and in its own try, so a mail provider
+    // having a bad morning cannot stop visits being created. Losing a day of
+    // scheduling is a real problem. Losing a day of reminders is not.
+    let emails = { remindersSent: 0, nudgesSent: 0 };
+    try {
+      emails = await sendScheduledEmails();
+    } catch (err) {
+      console.error("Scheduled email failed", err);
+    }
+
+    return NextResponse.json({ ok: true, ...generated, ...emails });
   } catch (err) {
     console.error("Daily generation failed", err);
     return NextResponse.json({ error: "Generation failed." }, { status: 500 });

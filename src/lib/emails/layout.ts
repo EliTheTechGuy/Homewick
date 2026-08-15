@@ -3,7 +3,7 @@ import { site } from "../site";
 /**
  * Shared shell for transactional email.
  *
- * Tables and inline styles, not flexbox and stylesheets — Outlook renders mail
+ * Tables and inline styles, not flexbox and stylesheets. Outlook renders mail
  * with Word's engine, which supports neither. The logo is a hosted PNG rather
  * than the SVG the site uses, because Gmail strips SVG entirely and the member
  * would see nothing where the brand should be.
