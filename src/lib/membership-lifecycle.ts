@@ -34,8 +34,15 @@ const GENERATION_HORIZON_DAYS = 45;
 /** Never run further ahead than this, however wide the horizon math gets. */
 const MAX_PERIODS_AHEAD = 3;
 
-/** Gap between the two visits in a period. */
+/** Gap between the two visits in a period when both share a weekday. */
 const VISIT_SPACING_DAYS = 14;
+
+/**
+ * Minimum gap when the two cleanings sit on different weekdays. Ten days keeps
+ * them spread across the month without forcing a full fortnight, which would
+ * push the second past the period end for some weekday pairs.
+ */
+const MIN_SPACING_DAYS = 10;
 
 /**
  * Nothing is ever scheduled inside this window. Someone who signs up at 2pm
@@ -56,6 +63,7 @@ export type SubscriptionRow = {
   visits_per_period: number;
   pet_surcharge_cents: number;
   preferred_weekday: number | null;
+  preferred_weekday_second: number | null;
   started_on: ISODate;
   billing_day: number;
   pending_amount_cents: number | null;
@@ -130,14 +138,20 @@ export function periodsToGenerate(
 /**
  * Where the two visits in a period land.
  *
- * The first falls on the member's preferred weekday; the second follows two
- * weeks later. If that would spill past the period boundary it is pulled back
- * to a week, a visit may not cross into the next period, because that is
- * rollover through the back door.
+ * Each cleaning has its own remembered weekday, so a member can take the first
+ * on a Tuesday and the second on a Wednesday if that suits them. When both
+ * fall on the same weekday the pattern is a clean fortnight. When they differ,
+ * the second is the first occurrence of its weekday at least ten days after
+ * the first, which keeps the two spread across the month rather than landing
+ * next to each other.
+ *
+ * Nothing may cross into the next period. That is the no rollover rule from
+ * the brief, and a visit pushed into next month is rollover wearing a hat.
  */
 export function visitDatesForPeriod(
   period: Period,
-  preferredWeekday: number | null,
+  /** Weekday per cleaning. A null entry means no preference. */
+  weekdays: (number | null)[],
   visitsPerPeriod: number,
   /**
    * Earliest date a visit may fall on. Used to keep the first period's
@@ -149,22 +163,37 @@ export function visitDatesForPeriod(
   const earliest =
     notBefore && isBefore(period.start, notBefore) ? notBefore : period.start;
 
+  const firstWeekday = weekdays[0] ?? null;
   const first =
-    preferredWeekday === null
-      ? earliest
-      : firstWeekdayOnOrAfter(earliest, preferredWeekday);
+    firstWeekday === null ? earliest : firstWeekdayOnOrAfter(earliest, firstWeekday);
 
   const dates: ISODate[] = [];
+
   for (let i = 0; i < visitsPerPeriod; i++) {
-    let candidate = addDays(first, i * VISIT_SPACING_DAYS);
+    let candidate: ISODate;
+
+    if (i === 0) {
+      candidate = first;
+    } else {
+      const wanted = weekdays[i] ?? firstWeekday;
+      const notBeforeThis = addDays(first, i === 1 ? MIN_SPACING_DAYS : i * VISIT_SPACING_DAYS);
+
+      candidate =
+        wanted === null || wanted === firstWeekday
+          ? addDays(first, i * VISIT_SPACING_DAYS)
+          : firstWeekdayOnOrAfter(notBeforeThis, wanted);
+    }
+
+    // Pull back a week if that overshoots, then give up rather than place a
+    // visit the member is not entitled to in this period.
     if (!isBefore(candidate, period.end)) {
       candidate = addDays(first, i * 7);
     }
-    // Still outside the period (very short period, or an odd config), skip it
-    // rather than silently placing a visit the member is not entitled to.
     if (!isBefore(candidate, period.end)) continue;
+
     dates.push(candidate);
   }
+
   return dates;
 }
 
@@ -224,7 +253,7 @@ export async function generateForSubscription(
 
     const wanted = visitDatesForPeriod(
       period,
-      sub.preferred_weekday,
+      [sub.preferred_weekday, sub.preferred_weekday_second],
       sub.visits_per_period,
       notBefore,
     );
@@ -299,6 +328,7 @@ export async function generateUpcomingVisits(
     const { rows: subs } = await client.query<SubscriptionRow>(
       `select id, customer_id, property_id, status, monthly_amount_cents,
               visits_per_period, pet_surcharge_cents, preferred_weekday,
+              preferred_weekday_second,
               started_on::text as started_on, billing_day,
               pending_amount_cents, pending_amount_effective_on::text
                 as pending_amount_effective_on,
@@ -391,6 +421,7 @@ export async function requestCancellation(
   const { rows } = await client.query<SubscriptionRow>(
     `select id, customer_id, property_id, status, monthly_amount_cents,
             visits_per_period, pet_surcharge_cents, preferred_weekday,
+            preferred_weekday_second,
             started_on::text as started_on, billing_day,
             pending_amount_cents, pending_amount_effective_on::text
               as pending_amount_effective_on,

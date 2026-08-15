@@ -198,6 +198,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
           visits_per_period: VISITS_PER_PERIOD,
           pet_surcharge_cents: 0,
           preferred_weekday: input.preferredWeekday ?? null,
+          preferred_weekday_second: null,
           started_on: startedOn,
           billing_day: billingDay,
           pending_amount_cents: null,
