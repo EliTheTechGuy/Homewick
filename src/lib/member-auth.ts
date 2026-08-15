@@ -7,7 +7,7 @@ import { query, queryOne, transaction } from "./db";
  *
  * A member proves they control the email address they booked with. That is the
  * same proof a password reset provides, so a password would add a credential
- * store — in the same database as customers' door codes — without adding
+ * store, in the same database as customers' door codes, without adding
  * security.
  *
  * Only hashes are stored. The raw token exists in the emailed URL and in the
@@ -40,8 +40,7 @@ export type LinkRequest =
 /**
  * Mint a sign-in link for an email address.
  *
- * Returns the URL rather than sending it, so the caller decides the channel —
- * email in normal use, printed to the console by the support script.
+ * Returns the URL rather than sending it, so the caller decides the channel, * email in normal use, printed to the console by the support script.
  */
 export async function createLoginLink(
   rawEmail: string,
@@ -57,7 +56,7 @@ export async function createLoginLink(
 
   // Accounts are created by booking, never by this form. An unknown address is
   // reported to the caller, which deliberately does not tell the visitor
-  // whether it exists — see the action.
+  // whether it exists, see the action.
   if (!customer) return { sent: false, reason: "unknown_email" };
 
   const recent = await queryOne<{ count: string }>(
@@ -87,8 +86,8 @@ export async function createLoginLink(
  * Spend a sign-in link and open a session.
  *
  * The token is marked used inside the same transaction that creates the
- * session, so a link that is clicked twice — by a mail scanner and then by the
- * member, say — cannot open two sessions.
+ * session, so a link that is clicked twice, by a mail scanner and then by the
+ * member, say, cannot open two sessions.
  */
 export async function consumeLoginToken(token: string): Promise<string | null> {
   if (!token) return null;

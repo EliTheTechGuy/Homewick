@@ -17,7 +17,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 border-b border-hairline bg-white/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-5 py-3">
-        <Link href="/" className="shrink-0" aria-label="Homewick Cleaning — home">
+        <Link href="/" className="shrink-0" aria-label="Homewick Cleaning, home">
           <LogoHorizontal className="h-11 w-auto" />
         </Link>
 

@@ -69,7 +69,7 @@ test("schema applies cleanly and seeds launch pricing", async () => {
 
 test("every table holding customer data has row-level security enabled", async () => {
   // On Supabase these tables are served over HTTP by PostgREST. Without RLS,
-  // the anon key — which ships in browser bundles — would read the customer
+  // the anon key, which ships in browser bundles, would read the customer
   // list, home addresses, and the access-secret rows.
   const { rows } = await db.query<{ tablename: string; rowsecurity: boolean }>(
     `select tablename, rowsecurity from pg_tables
@@ -289,7 +289,7 @@ test("generated visits carry no pet surcharge and stay inside their period", asy
     assert.equal(row.pet_surcharge_cents, 0);
     assert.ok(
       row.scheduled_date >= row.period_start && row.scheduled_date < row.period_end,
-      `visit ${row.scheduled_date} escaped period ${row.period_start}–${row.period_end}`,
+      `visit ${row.scheduled_date} escaped period ${row.period_start} to ${row.period_end}`,
     );
   }
 });

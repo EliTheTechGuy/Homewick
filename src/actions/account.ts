@@ -113,7 +113,7 @@ export async function signOut(): Promise<void> {
 /**
  * Claim this period's free add-on.
  *
- * The heavy lifting is claimFreePerk, which locks the period row — two taps in
+ * The heavy lifting is claimFreePerk, which locks the period row, two taps in
  * quick succession must not hand out two free ovens.
  */
 export async function chooseFreeAddOn(

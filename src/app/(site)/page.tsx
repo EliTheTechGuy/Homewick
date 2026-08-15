@@ -24,7 +24,7 @@ const steps = [
 ];
 
 const standards = [
-  "Flat pricing published up front — no on-site quoting, no hidden fees",
+  "Flat pricing published up front, with no on-site quoting and no hidden fees",
   "Bed linens changed on every clean, member or not",
   "The same cleaner whenever scheduling allows",
   "Entry codes stored separately and encrypted, shared only with the assigned cleaner on the day",

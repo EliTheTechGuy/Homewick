@@ -9,8 +9,8 @@ import { isStripeConfigured, stripe } from "@/lib/stripe";
 
 /**
  * Stripe webhook. Stripe owns billing state; this endpoint copies the parts we
- * need to join on — customer and subscription IDs, invoice IDs, and the
- * subscription's status — back onto our rows.
+ * need to join on, being customer and subscription IDs, invoice IDs, and the
+ * subscription's status, back onto our rows.
  *
  * The signature check is not optional: without it anyone who knows the URL can
  * mark subscriptions active.
@@ -21,7 +21,7 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   // This endpoint is public, so its replies name nothing. Reporting which
   // variable is missing turns it into a configuration oracle for anyone who
-  // curls it — handy for debugging, and no less handy for a stranger.
+  // curls it. Handy for debugging, and no less handy for a stranger.
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!isStripeConfigured() || !secret) {
     console.error(
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing signature." }, { status: 400 });
   }
 
-  // The raw body is required — parsing it first invalidates the signature.
+  // The raw body is required, because parsing it first invalidates the signature.
   const payload = await request.text();
 
   let event: Stripe.Event;

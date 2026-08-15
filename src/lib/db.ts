@@ -1,8 +1,7 @@
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
 /**
- * Postgres access. Supabase/Neon both hand you a pooled connection string —
- * use the pooler URL in serverless, not the direct one.
+ * Postgres access. Supabase/Neon both hand you a pooled connection string, * use the pooler URL in serverless, not the direct one.
  */
 
 declare global {
@@ -29,7 +28,7 @@ function createPool(): Pool {
 /**
  * Hosted Postgres (Supabase, Neon) requires TLS; a local one generally has no
  * certificate at all and refuses the handshake. Matching on the literal string
- * "localhost" is not enough — 127.0.0.1 and ::1 are just as local.
+ * "localhost" is not enough, 127.0.0.1 and ::1 are just as local.
  */
 export function sslFor(
   connectionString: string,

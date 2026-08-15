@@ -4,11 +4,11 @@
  * Cleaning is a local-time business. A visit on the 14th is on the 14th
  * regardless of where the server is. Putting a date-only value in a `Date`
  * gets you midnight UTC, which is 7pm on the 13th in Chicago for half the
- * year — that is how you end up scheduling visits a day early.
+ * year, that is how you end up scheduling visits a day early.
  *
  * Arithmetic below goes through UTC getters/setters only, so it never picks
  * up a local offset. The single conversion to an absolute instant happens in
- * SQL, explicitly in America/Chicago — see toTimestamptz in db.ts.
+ * SQL, explicitly in America/Chicago, see toTimestamptz in db.ts.
  */
 
 export type ISODate = string; // YYYY-MM-DD
@@ -57,7 +57,7 @@ export function addDays(date: ISODate, days: number): ISODate {
 
 /**
  * Add months, clamping to the last day of the target month.
- * Billing days are constrained to 1–28 so this clamp should never fire for
+ * Billing days are constrained to 1 to 28 so this clamp should never fire for
  * period math, but it keeps the helper honest for any other caller.
  */
 export function addMonths(date: ISODate, months: number): ISODate {

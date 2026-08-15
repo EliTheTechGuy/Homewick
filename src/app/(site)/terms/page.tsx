@@ -27,7 +27,7 @@ export default function TermsPage() {
               {site.serviceArea}. Cleaning is performed by our staff. Assignments, billing,
               scheduling, and customer communication are handled by the company. Please
               direct any request or complaint to Homewick rather than to the cleaner on
-              site — cleaners are not authorized to negotiate scope, price, or scheduling.
+              site. Cleaners are not authorized to negotiate scope, price, or scheduling.
             </p>
             <p>
               Single-family homes fall outside the published apartment rates and are quoted
@@ -108,8 +108,8 @@ export default function TermsPage() {
 
           <Clause n="5" title="Access to your home">
             <p>
-              You are responsible for providing a lawful means of entry — a gate code, door
-              code, or key location. Entry information is stored encrypted and separately
+              You are responsible for providing a lawful means of entry, such as a gate
+              code, a door code, or a key location. Entry information is stored encrypted and separately
               from your other account details, is disclosed only to the cleaner assigned to
               your visit on the day of service, and every disclosure is logged.
             </p>
@@ -154,7 +154,7 @@ export default function TermsPage() {
 
           <Clause n="9" title="Text messages">
             <p>
-              If you consent at booking, we will send service text messages — scheduling
+              If you consent at booking, we will send service text messages covering scheduling
               confirmations, day-before and arrival notices, completion notices, and a short
               feedback request after a visit. Message frequency varies by how often you are
               cleaned. Message and data rates may apply. Reply STOP at any time to

@@ -2,7 +2,7 @@
  * Launch pricing catalog. Mirrors the seed rows in db/migrations/0001_initial_schema.sql.
  *
  * These values drive display and quoting. They are deliberately NOT the source
- * of truth for an existing member's rate — a subscription's rate is snapshotted
+ * of truth for an existing member's rate. A subscription's rate is snapshotted
  * onto the subscription row at signup so that raising list price never
  * reprices anyone already signed up.
  *
@@ -61,7 +61,7 @@ export const MOST_POPULAR_SIZE: UnitSize = "2br_2ba";
 export const VISITS_PER_PERIOD = 2;
 
 /**
- * Charged once, on the booking that introduces the pet home — not per visit.
+ * Charged once, on the booking that introduces the pet home, never per visit.
  *
  * The original brief made this recurring per visit, which for a member on two
  * cleanings a month is an extra $30 every month for the life of the

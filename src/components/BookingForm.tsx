@@ -82,7 +82,7 @@ export function BookingForm({
    *
    * Without this, a click landing before hydration falls through to a native
    * form submission. The form has no action, so the browser issues a GET to
-   * this same page with every field in the query string — including the door
+   * this same page with every field in the query string, including the door
    * and gate codes, which would then sit in browser history, server access
    * logs, and any referrer header. Entry codes must never reach a URL.
    */
@@ -123,8 +123,8 @@ export function BookingForm({
 
     const form = new FormData(event.currentTarget);
 
-    // FormData.get returns null for a field that is not currently rendered —
-    // the entry code disappears when someone is letting the cleaner in — and
+    // FormData.get returns null for a field that is not currently rendered.
+    // The entry code disappears when someone is letting the cleaner in, and
     // the schema's optional() accepts undefined, not null. Coercing here keeps
     // a hidden field from failing validation against an error nobody can see.
     const field = (name: string) => (form.get(name) as string | null) ?? "";
@@ -165,7 +165,7 @@ export function BookingForm({
         // A rejection always says something. Field errors normally render
         // beside their input, but an error can land on a field that is not
         // currently on screen, and then the button just appears to do
-        // nothing — which is exactly how this went unnoticed once already.
+        // nothing, which is exactly how this went unnoticed once already.
         const issues = Object.entries(result.fieldErrors);
         setFormError(
           result.formError ??
@@ -199,9 +199,9 @@ export function BookingForm({
     <form
       onSubmit={handleSubmit}
       // Submission always goes through handleSubmit. method="post" only
-      // matters for a native submit that beats hydration — pressing Enter in a
-      // field, say — where it keeps the fields in the request body instead of
-      // appending them to the URL.
+      // matters for a native submit that beats hydration, such as pressing
+      // Enter in a field, where it keeps the fields in the request body instead
+      // of appending them to the URL.
       method="post"
       className="mt-12 grid gap-12 lg:grid-cols-[1fr_20rem]"
     >
@@ -243,7 +243,7 @@ export function BookingForm({
             ))}
           </div>
           <p className="mt-3 text-sm text-muted">
-            Single-family homes are quoted separately by square footage — pick the closest
+            Single-family homes are quoted separately by square footage. Pick the closest
             size and tell us in the notes below.
           </p>
         </Fieldset>
@@ -413,7 +413,7 @@ export function BookingForm({
 
         {/* Entry */}
         {/* The error belongs on the field itself, not repeated on the
-            fieldset — showing both renders it twice. */}
+            fieldset, because showing both renders it twice. */}
         <Fieldset
           legend="How we get in"
           hint="Entry details are encrypted, stored apart from the rest of your account, and shared only with the cleaner assigned to your visit on the day. Every access is logged."
@@ -463,7 +463,7 @@ export function BookingForm({
           <label className="flex cursor-pointer gap-3">
             <input type="checkbox" name="smsConsent" className="mt-1 h-4 w-4 accent-[#1F5FA6]" />
             <span className="text-sm leading-relaxed text-body">
-              Text me about my service — scheduling confirmations, day-before and arrival
+              Text me about my service, covering scheduling confirmations, day-before and arrival
               notices, and a short feedback request after a visit. Message frequency
               varies; message and data rates may apply. Reply STOP to unsubscribe or HELP
               for help. Consent is not a condition of purchase.

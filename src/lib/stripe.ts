@@ -4,7 +4,7 @@ import Stripe from "stripe";
  * Stripe is the source of truth for money. We store its IDs and ask it when we
  * need billing detail, rather than keeping a second ledger that can disagree.
  *
- * Card data never reaches our servers — everything goes through Checkout,
+ * Card data never reaches our servers, everything goes through Checkout,
  * which keeps us at PCI SAQ-A.
  */
 
