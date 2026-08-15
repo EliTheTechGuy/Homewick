@@ -11,6 +11,12 @@ export type UpcomingVisit = {
   weekday: string;
   status: string;
   inCurrentPeriod: boolean;
+  /**
+   * Last date this cleaning may be moved to, exclusive. Cleanings cannot cross
+   * into the next billing period, so the picker needs the boundary to stop a
+   * member choosing a date the server will only reject.
+   */
+  periodEndsOn: string | null;
 };
 
 export type MemberOverview = {
@@ -75,13 +81,16 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
     weekday: string;
     status: string;
     period_id: string | null;
+    period_end: string | null;
   }>(
     `select v.id,
             (v.scheduled_for at time zone $2)::date::text as on_date,
             to_char(v.scheduled_for at time zone $2, 'Dy') as weekday,
             v.status::text as status,
-            v.period_id
+            v.period_id,
+            sp.period_end::text as period_end
        from visits v
+       left join subscription_periods sp on sp.id = v.period_id
       where v.customer_id = $1
         and v.status in ('scheduled', 'assigned')
         and v.scheduled_for >= now()
@@ -102,6 +111,7 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
         weekday: v.weekday,
         status: v.status,
         inCurrentPeriod: false,
+        periodEndsOn: v.period_end,
       })),
       hasStripeCustomer: false,
     };
@@ -165,6 +175,7 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
         visits_per_period: sub.visits_per_period,
         pet_surcharge_cents: sub.pet_surcharge_cents,
         preferred_weekday: sub.preferred_weekday,
+        preferred_weekday_second: null,
         started_on: sub.started_on,
         billing_day: sub.billing_day,
         pending_amount_cents: null,
@@ -190,6 +201,7 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
       weekday: v.weekday,
       status: v.status,
       inCurrentPeriod: Boolean(period && v.period_id === period.id),
+      periodEndsOn: v.period_end,
     })),
     hasStripeCustomer: Boolean(sub.stripe_customer_id),
   };

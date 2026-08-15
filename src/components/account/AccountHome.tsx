@@ -13,6 +13,7 @@ import { FREE_PERK_ELIGIBLE, unitSizeLabel } from "@/lib/pricing";
 import type { MemberOverview } from "@/lib/member-account";
 import type { Member } from "@/lib/member-auth";
 import { Card } from "@/components/ui";
+import { RescheduleVisit } from "./RescheduleVisit";
 
 export function AccountHome({
   member,
@@ -181,15 +182,16 @@ export function AccountHome({
         ) : (
           <ul className="mt-4 divide-y divide-hairline">
             {upcoming.map((v) => (
-              <li key={v.id} className="flex items-baseline justify-between gap-4 py-3">
+              <li key={v.id} className="flex flex-wrap items-baseline justify-between gap-x-4 py-3">
                 <span className="text-body">{formatLong(v.onDate)}</span>
-                <span className="text-sm capitalize text-muted">{v.status}</span>
+                <RescheduleVisit visit={v} />
               </li>
             ))}
           </ul>
         )}
         <p className="mt-4 text-sm leading-relaxed text-muted">
-          Need to move or skip one? Reply to your confirmation text and we will sort it.
+          Move a cleaning to whatever day suits you. Whatever you pick becomes your
+          usual day from then on.
         </p>
       </Card>
 

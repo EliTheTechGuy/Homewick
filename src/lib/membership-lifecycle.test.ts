@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { addDays, addMonths, firstWeekdayOnOrAfter, today } from "./dates";
+import { addDays, addMonths, daysBetween, firstWeekdayOnOrAfter, today } from "./dates";
 import {
   cancellationEndDate,
   periodContaining,
@@ -20,6 +20,7 @@ function sub(overrides: Partial<SubscriptionRow> = {}): SubscriptionRow {
     visits_per_period: 2,
     pet_surcharge_cents: 0,
     preferred_weekday: 4, // Thursday
+    preferred_weekday_second: null,
     started_on: "2026-01-15",
     billing_day: 15,
     pending_amount_cents: null,
@@ -73,7 +74,7 @@ test("billing_day outside 1-28 is rejected rather than silently mishandled", () 
 
 test("both visits land inside their own period, never across the boundary", () => {
   const period = { start: "2026-01-15", end: "2026-02-15" };
-  const dates = visitDatesForPeriod(period, 4, 2);
+  const dates = visitDatesForPeriod(period, [4], 2);
 
   assert.equal(dates.length, 2);
   for (const d of dates) {
@@ -86,7 +87,7 @@ test("both visits land inside their own period, never across the boundary", () =
 test("second visit is pulled back rather than spilling into the next period", () => {
   // A preferred weekday landing late in the period leaves no room for +14.
   const period = { start: "2026-01-15", end: "2026-02-15" };
-  const late = visitDatesForPeriod({ ...period, end: "2026-02-01" }, 4, 2);
+  const late = visitDatesForPeriod({ ...period, end: "2026-02-01" }, [4], 2);
   for (const d of late) {
     assert.ok(d < "2026-02-01", `${d} escaped a short period`);
   }
@@ -95,7 +96,7 @@ test("second visit is pulled back rather than spilling into the next period", ()
 test("no visit is scheduled before the notBefore date", () => {
   // A member signing up on the 13th must not be sent a cleaner on the 13th.
   const period = { start: "2026-08-13", end: "2026-09-13" };
-  const dates = visitDatesForPeriod(period, 4, 2, "2026-08-21");
+  const dates = visitDatesForPeriod(period, [4], 2, "2026-08-21");
 
   assert.ok(dates.length > 0);
   for (const d of dates) {
@@ -108,7 +109,7 @@ test("regular cleanings fall after the onboarding deep clean", () => {
   // Signup 2026-08-13 (a Thursday), preferred weekday Thursday.
   const deepClean = "2026-08-20"; // first Thursday at least MIN_LEAD_DAYS out
   const period = { start: "2026-08-13", end: "2026-09-13" };
-  const dates = visitDatesForPeriod(period, 4, 2, addDays(deepClean, 1));
+  const dates = visitDatesForPeriod(period, [4], 2, addDays(deepClean, 1));
 
   for (const d of dates) {
     assert.ok(d > deepClean, `standard clean ${d} lands before the deep clean`);
@@ -117,14 +118,14 @@ test("regular cleanings fall after the onboarding deep clean", () => {
 
 test("notBefore does not push a visit past the period end", () => {
   const period = { start: "2026-08-13", end: "2026-09-13" };
-  const dates = visitDatesForPeriod(period, 4, 2, "2026-09-10");
+  const dates = visitDatesForPeriod(period, [4], 2, "2026-09-10");
   for (const d of dates) {
     assert.ok(d < period.end, `${d} escaped its period`);
   }
 });
 
 test("no preferred weekday falls back to the period start", () => {
-  const dates = visitDatesForPeriod({ start: "2026-01-15", end: "2026-02-15" }, null, 2);
+  const dates = visitDatesForPeriod({ start: "2026-01-15", end: "2026-02-15" }, [null], 2);
   assert.equal(dates[0], "2026-01-15");
 });
 
@@ -347,4 +348,65 @@ test("the two scheduled runs land on 9am in Texas all year", () => {
   // Winter: the 14:00 run is 8am and skips, the 15:00 run is 9am and sends.
   assert.equal(hourIn("2026-12-15T14:00:00Z"), 8);
   assert.equal(hourIn("2026-12-15T15:00:00Z"), 9);
+});
+
+// --- Independent weekday per cleaning ---------------------------------
+
+test("each cleaning can sit on its own weekday", () => {
+  const period = { start: "2026-08-13", end: "2026-09-13" };
+
+  // First on Tuesday (2), second on Wednesday (3).
+  const dates = visitDatesForPeriod(period, [2, 3], 2, "2026-08-13");
+  assert.equal(dates.length, 2);
+
+  const dayOf = (d: string) => new Date(`${d}T12:00:00Z`).getUTCDay();
+  assert.equal(dayOf(dates[0]), 2, "first should be a Tuesday");
+  assert.equal(dayOf(dates[1]), 3, "second should be a Wednesday");
+
+  // Spread across the month rather than landing next to each other.
+  assert.ok(daysBetween(dates[0], dates[1]) >= 10);
+  for (const d of dates) assert.ok(d >= period.start && d < period.end);
+});
+
+test("a shared weekday still gives a clean fortnight", () => {
+  const dates = visitDatesForPeriod(
+    { start: "2026-08-13", end: "2026-09-13" },
+    [4, 4],
+    2,
+    "2026-08-13",
+  );
+  assert.equal(daysBetween(dates[0], dates[1]), 14);
+});
+
+test("a second weekday of null follows the first", () => {
+  const withNull = visitDatesForPeriod(
+    { start: "2026-08-13", end: "2026-09-13" },
+    [4, null],
+    2,
+    "2026-08-13",
+  );
+  const bothSame = visitDatesForPeriod(
+    { start: "2026-08-13", end: "2026-09-13" },
+    [4, 4],
+    2,
+    "2026-08-13",
+  );
+  assert.deepEqual(withNull, bothSame, "existing members must not shift");
+});
+
+test("differing weekdays never push a cleaning into the next period", () => {
+  // Every weekday pair, across a period that starts on each weekday.
+  for (let start = 13; start <= 19; start++) {
+    const period = { start: `2026-08-${start}`, end: `2026-09-${start}` };
+    for (let a = 0; a < 7; a++) {
+      for (let b = 0; b < 7; b++) {
+        for (const d of visitDatesForPeriod(period, [a, b], 2, period.start)) {
+          assert.ok(
+            d >= period.start && d < period.end,
+            `weekdays ${a}/${b} in ${period.start} produced ${d}`,
+          );
+        }
+      }
+    }
+  }
 });
