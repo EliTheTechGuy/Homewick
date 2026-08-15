@@ -49,6 +49,17 @@ export function today(timeZone: string = TIMEZONE): ISODate {
   }).format(new Date());
 }
 
+/** The hour of the day, 0 to 23, in the business's timezone. */
+export function localHour(timeZone: string = TIMEZONE): number {
+  return Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      hour: "2-digit",
+      hour12: false,
+    }).format(new Date()),
+  );
+}
+
 export function addDays(date: ISODate, days: number): ISODate {
   const d = toUTC(date);
   d.setUTCDate(d.getUTCDate() + days);

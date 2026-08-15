@@ -310,3 +310,41 @@ test("a member is not charged twice for their first month", async () => {
     assert.ok(quote.totalCents < oldTotal);
   }
 });
+
+// --- Reminder timing --------------------------------------------------
+// Vercel schedules in UTC and ignores daylight saving, so the job runs twice
+// and a window decides which run is actually 9am in Texas.
+
+test("reminders only send during the morning window", async () => {
+  const { sendScheduledEmails } = await import("./emails/scheduled");
+
+  // 8am, which is what 14:00 UTC becomes in winter. Must not send.
+  const early = await sendScheduledEmails("2026-12-15", 8);
+  assert.equal(early.remindersSent, 0);
+  assert.equal(early.nudgesSent, 0);
+  assert.match(early.skipped ?? "", /outside/);
+
+  // 10pm, in case a run fires very late. Must not send.
+  const late = await sendScheduledEmails("2026-12-15", 22);
+  assert.match(late.skipped ?? "", /outside/);
+});
+
+test("the two scheduled runs land on 9am in Texas all year", () => {
+  const hourIn = (iso: string) =>
+    Number(
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone: "America/Chicago",
+        hour: "2-digit",
+        hour12: false,
+      }).format(new Date(iso)),
+    );
+
+  // Summer: the 14:00 run is 9am and sends, the 15:00 run is 10am and finds
+  // nothing new because sends are deduplicated per visit.
+  assert.equal(hourIn("2026-08-15T14:00:00Z"), 9);
+  assert.equal(hourIn("2026-08-15T15:00:00Z"), 10);
+
+  // Winter: the 14:00 run is 8am and skips, the 15:00 run is 9am and sends.
+  assert.equal(hourIn("2026-12-15T14:00:00Z"), 8);
+  assert.equal(hourIn("2026-12-15T15:00:00Z"), 9);
+});

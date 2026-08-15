@@ -1,5 +1,5 @@
 import { query } from "../db";
-import { TIMEZONE, addDays, today, type ISODate } from "../dates";
+import { TIMEZONE, addDays, localHour, today, type ISODate } from "../dates";
 import { sendOnce } from "./send-once";
 import { freeAddOnNudgeEmail, visitReminderEmail } from "./templates";
 
@@ -15,14 +15,39 @@ import { freeAddOnNudgeEmail, visitReminderEmail } from "./templates";
 export type ScheduledEmailResult = {
   remindersSent: number;
   nudgesSent: number;
+  skipped?: string;
 };
+
+/**
+ * Email only goes out in the morning, local time.
+ *
+ * Vercel schedules in UTC and does not follow daylight saving, so a single
+ * fixed time drifts an hour twice a year. The job therefore runs at both 14:00
+ * and 15:00 UTC, and this window decides which of those two is actually 9am in
+ * Texas. In summer the first run qualifies and the second finds nothing left
+ * to send. In winter the first is 8am and skips, and the second sends.
+ *
+ * The upper bound is deliberately loose, because Vercel treats cron times as
+ * approximate and may fire late.
+ */
+const SEND_FROM_HOUR = 9;
+const SEND_UNTIL_HOUR = 11;
 
 /** How far into a billing period to wait before nudging about the free add-on. */
 const NUDGE_AFTER_DAYS = 2;
 
 export async function sendScheduledEmails(
   from: ISODate = today(),
+  hourNow: number = localHour(),
 ): Promise<ScheduledEmailResult> {
+  if (hourNow < SEND_FROM_HOUR || hourNow > SEND_UNTIL_HOUR) {
+    return {
+      remindersSent: 0,
+      nudgesSent: 0,
+      skipped: `local hour ${hourNow} is outside the ${SEND_FROM_HOUR} to ${SEND_UNTIL_HOUR} window`,
+    };
+  }
+
   const remindersSent = await sendVisitReminders(from);
   const nudgesSent = await sendFreeAddOnNudges(from);
   return { remindersSent, nudgesSent };
