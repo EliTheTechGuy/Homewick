@@ -1,10 +1,17 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { transaction, queryOne, isDatabaseConfigured } from "@/lib/db";
-import { createLoginLink, currentMember, endSession } from "@/lib/member-auth";
+import {
+  SESSION_COOKIE,
+  consumeLoginToken,
+  createLoginLink,
+  currentMember,
+  endSession,
+  sessionCookieOptions,
+} from "@/lib/member-auth";
 import { sendEmail, signInEmail } from "@/lib/email";
 import { claimFreePerk } from "@/lib/membership-lifecycle";
 import { memberOverview } from "@/lib/member-account";
@@ -61,6 +68,40 @@ export async function requestLoginLink(
   } catch (err) {
     console.error("[account] sign-in link failed", err);
     return { ok: false, message: "Sign-in is unavailable right now. Please try again shortly." };
+  }
+}
+
+/**
+ * Complete sign in from an emailed link.
+ *
+ * Only ever runs on a submit, never on a page load. Consuming the token on a
+ * GET meant Outlook's Safe Links scanner spent it while checking the message,
+ * and the member was told a link they had just been sent had expired.
+ */
+export async function completeSignIn(
+  token: unknown,
+): Promise<{ ok: boolean; message: string }> {
+  const parsed = z.string().trim().min(1).safeParse(token);
+  if (!parsed.success) {
+    return { ok: false, message: "That link is incomplete. Ask for a fresh one." };
+  }
+
+  try {
+    const sessionToken = await consumeLoginToken(parsed.data);
+    if (!sessionToken) {
+      return {
+        ok: false,
+        message:
+          "Links last 15 minutes and work once. Ask for a new one and it will sign you straight in.",
+      };
+    }
+
+    (await cookies()).set(SESSION_COOKIE, sessionToken, sessionCookieOptions());
+    revalidatePath("/account");
+    return { ok: true, message: "Signed in." };
+  } catch (err) {
+    console.error("[account] completing sign in failed", err);
+    return { ok: false, message: "Sign in is unavailable right now. Please try again." };
   }
 }
 
