@@ -109,6 +109,42 @@ export function freeAddOnNudgeEmail(params: {
 }
 
 /**
+ * How did we do, sent the morning after a clean.
+ *
+ * The rating drives service recovery and nothing else. Every customer gets the
+ * same public review link on the thank you page whatever they score, because
+ * steering only happy customers toward a review breaches Google's policies
+ * and the FTC's 2024 rule on suppressing negative feedback. The score decides
+ * whether we chase the problem, never who is invited to review us.
+ *
+ * The stars are links so a reply costs one tap. They open a page, they do not
+ * record anything, so a mail scanner following them cannot submit a rating.
+ */
+export function feedbackRequestEmail(params: {
+  firstName: string;
+  onDate: ISODate;
+  feedbackUrl: string;
+}): Composed {
+  const stars = [1, 2, 3, 4, 5]
+    .map(
+      (n) =>
+        `<a href="${params.feedbackUrl}?rating=${n}" style="display:inline-block;padding:10px 16px;margin:0 4px 8px 0;border:1px solid #1F5FA6;border-radius:999px;font:600 15px -apple-system,'Helvetica Neue',Arial,sans-serif;color:#1F5FA6;text-decoration:none;">${n}</a>`,
+    )
+    .join("");
+
+  return compose({
+    subject: "How did we do?",
+    heading: "How did we do?",
+    intro: `Hi ${params.firstName}. We cleaned your place on ${formatLong(params.onDate)}. Tap a number, 5 being great.`,
+    body: [
+      `<div style="margin:6px 0 4px">${stars}</div>`,
+      "It takes one tap, and there is room to say more on the next page if you want to.",
+      "If anything was not right, tell us within 48 hours and we will come back and redo it at no charge.",
+    ],
+  });
+}
+
+/**
  * Cancellation acknowledged.
  *
  * The end date is the whole point. A member who cancels and is then charged
