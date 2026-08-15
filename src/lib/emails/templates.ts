@@ -109,6 +109,47 @@ export function freeAddOnNudgeEmail(params: {
 }
 
 /**
+ * Cancellation acknowledged.
+ *
+ * The end date is the whole point. A member who cancels and is then charged
+ * again, or who assumes a booked cleaning is gone when it is not, has a
+ * dispute rather than a question. Putting the date and the remaining visits in
+ * writing settles both before they arise.
+ */
+export function cancellationConfirmedEmail(params: {
+  firstName: string;
+  endsOn: ISODate;
+  remainingVisits: ISODate[];
+}): Composed {
+  const rows: Row[] = [
+    { label: "Membership ends", value: formatLong(params.endsOn) },
+    { label: "Last charge", value: "Already taken. There will be no further charges." },
+  ];
+
+  for (const [i, date] of params.remainingVisits.slice(0, 3).entries()) {
+    rows.push({
+      label: i === 0 ? "Cleanings still booked" : " ",
+      value: formatLong(date),
+    });
+  }
+
+  return compose({
+    subject: "Your membership has been cancelled",
+    heading: "That is all sorted",
+    intro: `Thanks ${params.firstName}. Your membership will end on ${formatLong(params.endsOn)}, and you will not be charged again.`,
+    rows,
+    body: [
+      params.remainingVisits.length > 0
+        ? "The cleanings listed above are already paid for and still going ahead. Nothing changes about them."
+        : "You have no cleanings left to run, so there is nothing further to arrange.",
+      "If you change your mind before that date, get in touch and we can pick things up again without you losing anything.",
+    ],
+    footerNote:
+      "You can still book a one-time clean any time, at the standard rate.",
+  });
+}
+
+/**
  * Membership started, first payment taken.
  *
  * This is the email that has to earn the subscription. It explains the three

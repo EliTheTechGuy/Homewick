@@ -1,6 +1,7 @@
 import { query, queryOne } from "./db";
 import { TIMEZONE } from "./dates";
 import type { UnitSize } from "./pricing";
+import { cancellationEndDate } from "./membership-lifecycle";
 
 /** Everything the member's account page renders, in two queries. */
 
@@ -19,6 +20,13 @@ export type MemberOverview = {
     monthlyAmountCents: number;
     unitSize: UnitSize;
     endsOn: string | null;
+    /**
+     * What the end date would be if they cancelled today. Shown before they
+     * confirm, because "cancel" means different things depending on where in
+     * the billing period they are, and finding that out afterwards feels like
+     * a trick.
+     */
+    wouldEndOn: string;
   } | null;
   currentPeriod: {
     id: string;
@@ -42,10 +50,17 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
     monthly_amount_cents: number;
     unit_size: UnitSize;
     ends_on: string | null;
+    started_on: string;
+    billing_day: number;
+    visits_per_period: number;
+    pet_surcharge_cents: number;
+    preferred_weekday: number | null;
     stripe_customer_id: string | null;
   }>(
     `select s.id, s.status::text as status, s.monthly_amount_cents, s.unit_size,
-            s.ends_on::text as ends_on, c.stripe_customer_id
+            s.ends_on::text as ends_on, s.started_on::text as started_on,
+            s.billing_day, s.visits_per_period, s.pet_surcharge_cents,
+            s.preferred_weekday, c.stripe_customer_id
        from subscriptions s
        join customers c on c.id = s.customer_id
       where s.customer_id = $1 and s.status <> 'canceled'
@@ -141,6 +156,21 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
       monthlyAmountCents: sub.monthly_amount_cents,
       unitSize: sub.unit_size,
       endsOn: sub.ends_on,
+      wouldEndOn: cancellationEndDate({
+        id: sub.id,
+        customer_id: customerId,
+        property_id: "",
+        status: "active",
+        monthly_amount_cents: sub.monthly_amount_cents,
+        visits_per_period: sub.visits_per_period,
+        pet_surcharge_cents: sub.pet_surcharge_cents,
+        preferred_weekday: sub.preferred_weekday,
+        started_on: sub.started_on,
+        billing_day: sub.billing_day,
+        pending_amount_cents: null,
+        pending_amount_effective_on: null,
+        ends_on: null,
+      }),
     },
     currentPeriod: period
       ? {

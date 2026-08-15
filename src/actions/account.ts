@@ -13,7 +13,10 @@ import {
   sessionCookieOptions,
 } from "@/lib/member-auth";
 import { sendEmail, signInEmail } from "@/lib/email";
-import { claimFreePerk } from "@/lib/membership-lifecycle";
+import { claimFreePerk, requestCancellation } from "@/lib/membership-lifecycle";
+import { TIMEZONE, formatLong } from "@/lib/dates";
+import { sendOnce } from "@/lib/emails/send-once";
+import { cancellationConfirmedEmail } from "@/lib/emails/templates";
 import { memberOverview } from "@/lib/member-account";
 import { isStripeConfigured, stripe } from "@/lib/stripe";
 import { site } from "@/lib/site";
@@ -173,6 +176,121 @@ export async function chooseFreeAddOn(
     return { ok: true, message: `${addOn.name} is booked for your next clean, free.` };
   } catch (err) {
     console.error("[account] free add-on claim failed", err);
+    return { ok: false, message: "That did not go through. Please try again." };
+  }
+}
+
+/**
+ * Cancel a membership, with the notice period the service agreement promises.
+ *
+ * Three things have to happen together, and missing any one of them causes a
+ * different kind of complaint:
+ *
+ *   - Our own state moves to pending_cancellation with a computed end date,
+ *     and visits beyond that date are dropped.
+ *   - Stripe is told to stop billing on the same date. Without this the
+ *     member keeps being charged for a service that has ended, which is the
+ *     worst failure available here.
+ *   - The member gets the end date in writing, so a cleaning that is still
+ *     coming is not mistaken for a cancellation that failed.
+ */
+export async function cancelMembership(): Promise<{ ok: boolean; message: string }> {
+  const member = await currentMember();
+  if (!member) return { ok: false, message: "Please sign in again." };
+
+  try {
+    const result = await transaction(async (client) => {
+      const { rows } = await client.query<{
+        id: string;
+        status: string;
+        stripe_subscription_id: string | null;
+      }>(
+        `select id, status::text as status, stripe_subscription_id
+           from subscriptions
+          where customer_id = $1 and status in ('active', 'paused')
+          order by created_at desc
+          limit 1`,
+        [member.customerId],
+      );
+
+      const sub = rows[0];
+      if (!sub) return null;
+
+      const { endsOn } = await requestCancellation(client, sub.id);
+
+      const remaining = await client.query<{ on_date: string }>(
+        `select (scheduled_for at time zone $2)::date::text as on_date
+           from visits
+          where subscription_id = $1 and status = 'scheduled'
+            and scheduled_for >= now()
+          order by scheduled_for`,
+        [sub.id, TIMEZONE],
+      );
+
+      // The instant service ends, in local terms, for Stripe.
+      const boundary = await client.query<{ epoch: string }>(
+        `select extract(epoch from ($1::date at time zone $2))::bigint::text as epoch`,
+        [endsOn, TIMEZONE],
+      );
+
+      return {
+        subscriptionId: sub.id,
+        stripeSubscriptionId: sub.stripe_subscription_id,
+        endsOn,
+        remaining: remaining.rows.map((r) => r.on_date),
+        endsAtEpoch: Number(boundary.rows[0].epoch),
+      };
+    });
+
+    if (!result) {
+      return { ok: false, message: "You do not have a membership to cancel." };
+    }
+
+    // Stripe stops billing on the same date the service stops. Doing this
+    // outside the transaction keeps a Stripe outage from rolling back a
+    // cancellation the member has already been told about.
+    if (result.stripeSubscriptionId && isStripeConfigured()) {
+      try {
+        const nowEpoch = Math.floor(Date.now() / 1000);
+        await stripe().subscriptions.update(result.stripeSubscriptionId,
+          result.endsAtEpoch > nowEpoch
+            ? { cancel_at: result.endsAtEpoch }
+            : { cancel_at_period_end: true },
+        );
+      } catch (err) {
+        // Loud, because the member is now cancelled with us while Stripe may
+        // still bill them. That needs a human before the next invoice.
+        console.error(
+          `[billing] URGENT: subscription ${result.subscriptionId} cancelled in our ` +
+            `records but Stripe was not updated. It may keep charging.`,
+          err,
+        );
+      }
+    }
+
+    try {
+      await sendOnce({
+        eventKey: `cancel:${result.subscriptionId}`,
+        kind: "cancellation_confirmed",
+        to: member.email,
+        customerId: member.customerId,
+        message: cancellationConfirmedEmail({
+          firstName: member.firstName,
+          endsOn: result.endsOn,
+          remainingVisits: result.remaining,
+        }),
+      });
+    } catch (err) {
+      console.error("[email] cancellation confirmation failed", err);
+    }
+
+    revalidatePath("/account");
+    return {
+      ok: true,
+      message: `Your membership will end on ${formatLong(result.endsOn)}. We have emailed you the details.`,
+    };
+  } catch (err) {
+    console.error("[account] cancellation failed", err);
     return { ok: false, message: "That did not go through. Please try again." };
   }
 }
