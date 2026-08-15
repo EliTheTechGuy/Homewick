@@ -5,6 +5,7 @@ import { TIMEZONE, formatLong, today } from "@/lib/dates";
 import { formatCents } from "@/lib/money";
 import { unitSizeLabel, type UnitSize } from "@/lib/pricing";
 import { RevealAccess } from "@/components/RevealAccess";
+import { MarkComplete } from "@/components/MarkComplete";
 
 export const metadata: Metadata = { title: "Today", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -180,7 +181,10 @@ export default async function AdminTodayPage({
               )}
 
               <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-hairline pt-4">
-                <RevealAccess visitId={visit.id} propertyId={visit.property_id} />
+                <div className="flex flex-wrap items-center gap-3">
+                  <RevealAccess visitId={visit.id} propertyId={visit.property_id} />
+                  {visit.status !== "completed" && <MarkComplete visitId={visit.id} />}
+                </div>
                 <p className="text-sm text-muted">
                   Cleaner:{" "}
                   <span className="font-medium text-body">

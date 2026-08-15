@@ -1,7 +1,14 @@
+import { createHash, randomBytes } from "node:crypto";
 import { query } from "../db";
 import { TIMEZONE, addDays, localHour, today, type ISODate } from "../dates";
+import { sendEmail } from "../email";
+import { site } from "../site";
 import { sendOnce } from "./send-once";
-import { freeAddOnNudgeEmail, visitReminderEmail } from "./templates";
+import {
+  feedbackRequestEmail,
+  freeAddOnNudgeEmail,
+  visitReminderEmail,
+} from "./templates";
 
 /**
  * The email the daily job sends.
@@ -15,6 +22,7 @@ import { freeAddOnNudgeEmail, visitReminderEmail } from "./templates";
 export type ScheduledEmailResult = {
   remindersSent: number;
   nudgesSent: number;
+  feedbackSent: number;
   skipped?: string;
 };
 
@@ -44,13 +52,88 @@ export async function sendScheduledEmails(
     return {
       remindersSent: 0,
       nudgesSent: 0,
+      feedbackSent: 0,
       skipped: `local hour ${hourNow} is outside the ${SEND_FROM_HOUR} to ${SEND_UNTIL_HOUR} window`,
     };
   }
 
   const remindersSent = await sendVisitReminders(from);
   const nudgesSent = await sendFreeAddOnNudges(from);
-  return { remindersSent, nudgesSent };
+  const feedbackSent = await sendFeedbackRequests();
+  return { remindersSent, nudgesSent, feedbackSent };
+}
+
+/**
+ * Ask how a finished clean went, the morning after it is marked complete.
+ *
+ * Not hours after, because the customer needs to have walked in and seen it.
+ * Asking while they are still at work gets an answer about nothing.
+ *
+ * Creating the feedback row is what claims the send. The unique constraint on
+ * visit_id means a second run cannot ask twice about the same clean.
+ */
+async function sendFeedbackRequests(): Promise<number> {
+  const visits = await query<{
+    visit_id: string;
+    first_name: string;
+    email: string;
+    on_date: string;
+  }>(
+    `select v.id as visit_id, c.first_name, c.email::text as email,
+            (v.scheduled_for at time zone $1)::date::text as on_date
+       from visits v
+       join customers c on c.id = v.customer_id
+       left join visit_feedback f on f.visit_id = v.id
+      where v.status = 'completed'
+        and v.completed_at is not null
+        and v.completed_at > now() - interval '7 days'
+        and f.id is null`,
+    [TIMEZONE],
+  );
+
+  let sent = 0;
+  for (const visit of visits) {
+    try {
+      const token = randomBytes(32).toString("base64url");
+
+      const claimed = await query<{ id: string }>(
+        `insert into visit_feedback (visit_id, channel, token_hash, sent_at)
+         values ($1, 'email', $2, now())
+         on conflict (visit_id) do nothing
+         returning id`,
+        [visit.visit_id, createHash("sha256").update(token).digest("hex")],
+      );
+      if (claimed.length === 0) continue;
+
+      const message = feedbackRequestEmail({
+        firstName: visit.first_name,
+        onDate: visit.on_date,
+        feedbackUrl: `${site.url}/feedback/${token}`,
+      });
+
+      const { delivered } = await sendEmail({
+        to: visit.email,
+        subject: message.subject,
+        text: message.text,
+        html: message.html,
+      });
+
+      if (delivered) {
+        sent++;
+      } else {
+        // Release the claim so a later run can retry, matching how the other
+        // scheduled email behaves. Only safe while nobody has answered.
+        await query(
+          `delete from visit_feedback where visit_id = $1 and rating is null`,
+          [visit.visit_id],
+        );
+      }
+    } catch (err) {
+      console.error(`[email] feedback request failed for visit ${visit.visit_id}`, err);
+    }
+  }
+
+  return sent;
 }
 
 /** Reminders for every cleaning happening tomorrow, member or not. */
