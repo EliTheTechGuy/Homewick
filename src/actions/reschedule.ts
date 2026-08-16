@@ -11,9 +11,15 @@ import {
   formatLong,
   isISODate,
   today,
+  type ISODate,
   weekday,
 } from "@/lib/dates";
 import { MIN_LEAD_DAYS, visitDatesForPeriod } from "@/lib/membership-lifecycle";
+import { queryOne } from "@/lib/db";
+import { sendOnce } from "@/lib/emails/send-once";
+import { visitMovedAlertEmail } from "@/lib/emails/templates";
+import { notifyCleaner } from "@/actions/cleaners";
+import { site } from "@/lib/site";
 
 type Client = Parameters<Parameters<typeof transaction>[0]>[0];
 
@@ -121,15 +127,19 @@ export async function rescheduleVisit(
   }
 
   try {
-    return await transaction(async (client) => {
+    const outcome = await transaction(async (client) => {
       const { rows } = await client.query<{
         id: string;
         subscription_id: string | null;
         period_start: string | null;
         period_end: string | null;
         slot: string;
+        from_date: string;
+        assigned_cleaner_id: string | null;
       }>(
         `select v.id, v.subscription_id,
+                (v.scheduled_for at time zone $3)::date::text as from_date,
+                v.assigned_cleaner_id,
                 sp.period_start::text, sp.period_end::text,
                 (
                   select count(*) from visits other
@@ -143,7 +153,7 @@ export async function rescheduleVisit(
             and v.customer_id = $2
             and v.status in ('scheduled', 'assigned')
           for update of v`,
-        [id.data, member.customerId],
+        [id.data, member.customerId, TIMEZONE],
       );
 
       const visit = rows[0];
@@ -161,9 +171,13 @@ export async function rescheduleVisit(
         }
       }
 
+      // rescheduled_from keeps the value it had a moment ago, so the schedule
+      // can show where a visit came from rather than only where it is now.
       await client.query(
         `update visits
-            set scheduled_for = (($2::date + $3::time) at time zone $4)
+            set rescheduled_from = scheduled_for,
+                rescheduled_at = now(),
+                scheduled_for = (($2::date + $3::time) at time zone $4)
           where id = $1`,
         [visit.id, date.data, DEFAULT_VISIT_TIME, TIMEZONE],
       );
@@ -192,13 +206,95 @@ export async function rescheduleVisit(
       }
 
       revalidatePath("/account");
+      revalidatePath("/admin");
       return {
         ok: true as const,
         message: `Moved to ${formatLong(date.data)}. We will keep that day for future cleanings unless you change it again.`,
+        moved: { visitId: visit.id, from: visit.from_date, to: date.data,
+                 cleanerId: visit.assigned_cleaner_id },
       };
     });
+    // Notifications go out after the transaction commits, not inside it. A
+    // mail provider having a bad minute must not roll back a move the member
+    // has already been told succeeded.
+    if (outcome.ok && "moved" in outcome && outcome.moved) {
+      await notifyVisitMoved(outcome.moved);
+    }
+
+    return { ok: outcome.ok, message: outcome.message };
   } catch (err) {
     console.error("[account] reschedule failed", err);
     return { ok: false, message: "That did not save. Please try again." };
+  }
+}
+
+/**
+ * Tell the people who need to know that a cleaning moved.
+ *
+ * The owner always, because the board changed without them touching it: the
+ * old day may now have a gap and the new day may need looking at. The assigned
+ * cleaner only if there is one, because they were sent the old date and would
+ * otherwise turn up on it.
+ *
+ * Failures are logged and swallowed. The move itself has already happened and
+ * been confirmed to the member, so throwing here would report a failure that
+ * did not occur.
+ */
+async function notifyVisitMoved(moved: {
+  visitId: string;
+  from: ISODate;
+  to: ISODate;
+  cleanerId: string | null;
+}): Promise<void> {
+  if (moved.cleanerId) {
+    await notifyCleaner(moved.visitId, moved.cleanerId, "moved");
+  }
+
+  if (!site.ownerEmail) return;
+
+  try {
+    const row = await queryOne<{
+      first_name: string;
+      last_name: string;
+      phone: string;
+      line1: string;
+      line2: string | null;
+      city: string;
+      postal_code: string;
+      cleaner_name: string | null;
+    }>(
+      `select c.first_name, c.last_name, c.phone,
+              p.line1, p.line2, p.city, p.postal_code,
+              cl.first_name || ' ' || cl.last_name as cleaner_name
+         from visits v
+         join customers c on c.id = v.customer_id
+         join properties p on p.id = v.property_id
+         left join cleaners cl on cl.id = v.assigned_cleaner_id
+        where v.id = $1`,
+      [moved.visitId],
+    );
+    if (!row) return;
+
+    // Keyed on both dates, so moving the same visit again is a fresh alert
+    // while a retry of this one is not.
+    await sendOnce({
+      eventKey: `visit:${moved.visitId}:moved:${moved.from}:${moved.to}`,
+      kind: "visit_moved_alert",
+      to: site.ownerEmail,
+      customerId: null,
+      message: visitMovedAlertEmail({
+        customerName: `${row.first_name} ${row.last_name}`,
+        customerPhone: row.phone,
+        fromDate: moved.from,
+        toDate: moved.to,
+        address: [row.line1, row.line2, `${row.city}, TX ${row.postal_code}`]
+          .filter(Boolean)
+          .join(", "),
+        cleanerName: row.cleaner_name,
+        adminUrl: `${site.url}/admin?date=${moved.to}`,
+      }),
+    });
+  } catch (err) {
+    console.error(`[email] moved alert failed for visit ${moved.visitId}`, err);
   }
 }

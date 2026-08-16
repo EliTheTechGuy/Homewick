@@ -38,6 +38,7 @@ type VisitRow = {
   add_ons: { name: string; is_free_perk: boolean }[] | null;
   cleaner_name: string | null;
   assigned_cleaner_id: string | null;
+  moved_from: string | null;
 };
 
 export default async function AdminTodayPage({
@@ -81,6 +82,7 @@ export default async function AdminTodayPage({
             c.first_name, c.last_name, c.phone,
             cl.first_name || ' ' || cl.last_name as cleaner_name,
             v.assigned_cleaner_id,
+            (v.rescheduled_from at time zone $2)::date::text as moved_from,
             (select json_agg(json_build_object('name', a.name,
                                                'is_free_perk', va.is_free_perk)
                              order by a.sort_order)
@@ -216,6 +218,7 @@ export default async function AdminTodayPage({
                 <Tag>{visit.origin === "membership" ? "Membership" : "One-time"}</Tag>
                 {/* The surcharge is one-time and usually zero by now, so the
                     cleaner just needs to know there are animals in the home. */}
+                {visit.moved_from && <Tag tone="warn">Moved from {formatLong(visit.moved_from)}</Tag>}
                 {visit.has_pets && <Tag tone="warn">Pets</Tag>}
                 <Tag tone={visit.status === "completed" ? "good" : "plain"}>
                   {visit.status}

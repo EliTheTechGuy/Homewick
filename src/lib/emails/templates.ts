@@ -400,3 +400,46 @@ export function cleanerAssignmentEmail(params: {
       "This link is yours; it opens the job and shows entry details on the day. Do not forward it.",
   });
 }
+
+/**
+ * A cleaning moved, sent to the operator.
+ *
+ * Members can move their own cleanings, which is the point of the feature, but
+ * it means the board can change without anybody being told. A cleaner may
+ * already have been sent the old date, and a day that was covered may now have
+ * a gap in it.
+ */
+export function visitMovedAlertEmail(params: {
+  customerName: string;
+  customerPhone: string;
+  fromDate: ISODate;
+  toDate: ISODate;
+  address: string;
+  cleanerName: string | null;
+  adminUrl: string;
+}): Composed {
+  const rows: Row[] = [
+    { label: "Was", value: formatLong(params.fromDate) },
+    { label: "Now", value: formatLong(params.toDate) },
+    { label: "Where", value: params.address },
+    { label: "Customer", value: `${params.customerName}, ${params.customerPhone}` },
+    {
+      label: "Cleaner",
+      value: params.cleanerName ?? "Nobody assigned",
+    },
+  ];
+
+  return compose({
+    subject: `Moved: ${params.customerName}, ${formatLong(params.fromDate)} to ${formatLong(params.toDate)}`,
+    heading: "A cleaning has moved",
+    intro: `${params.customerName} moved their clean from ${formatLong(params.fromDate)} to ${formatLong(params.toDate)}.`,
+    rows,
+    body: [
+      params.cleanerName
+        ? `${params.cleanerName} was on this one and has been emailed the new date.`
+        : "Nobody is assigned to this yet, so there is nothing to tell anyone.",
+      "The old day may now have a gap in it, and the new day may need looking at.",
+    ],
+    cta: { label: "Open the new day", url: params.adminUrl },
+  });
+}
