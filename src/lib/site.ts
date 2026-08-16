@@ -20,6 +20,15 @@ export const site = {
   reviewUrl: process.env.NEXT_PUBLIC_REVIEW_URL ?? null,
   phone: process.env.NEXT_PUBLIC_CONTACT_PHONE ?? null,
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  /**
+   * Where operator alerts go when a booking is paid. Server-side only, and
+   * deliberately not NEXT_PUBLIC: this address is for running the business,
+   * not for customers, and it should never reach the browser bundle.
+   *
+   * Unset means no alerts are sent and nothing errors, which is the right
+   * behaviour for a preview deployment.
+   */
+  ownerEmail: process.env.OWNER_ALERT_EMAIL ?? null,
 } as const;
 
 /** Bumped whenever the service agreement text changes; recorded on acceptance. */

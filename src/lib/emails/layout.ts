@@ -134,6 +134,23 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/**
+ * Turn a body paragraph written as HTML into plain text.
+ *
+ * Tags come out, then entities are decoded. The decode matters because
+ * anything interpolating customer-supplied text has to escape it for the HTML
+ * half, and without this the plain-text half would show the reader
+ * "&lt;keep the door shut&gt;" rather than what the customer actually typed.
+ *
+ * Ampersand is decoded last, so an escaped "&amp;lt;" survives as the literal
+ * text "&lt;" instead of collapsing into a bracket.
+ */
 function stripTags(value: string): string {
-  return value.replace(/<[^>]+>/g, "");
+  return value
+    .replace(/<[^>]+>/g, "")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&");
 }
