@@ -101,7 +101,8 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
        from subscriptions s
        join customers c on c.id = s.customer_id
        join properties p on p.id = s.property_id
-      where s.customer_id = $1 and s.status <> 'canceled'
+      where s.customer_id = $1
+        and s.status in ('active', 'paused', 'pending_cancellation')
       order by s.created_at desc
       limit 1`,
     [customerId],

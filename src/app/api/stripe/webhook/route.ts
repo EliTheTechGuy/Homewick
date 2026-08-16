@@ -75,13 +75,24 @@ async function handle(event: Stripe.Event): Promise<void> {
         typeof session.subscription === "string" ? session.subscription : null;
 
       if (session.metadata?.kind === "membership" && session.metadata.subscription_id) {
+        // Payment is what turns a booking into a membership. Only ever
+        // promotes forward: a webhook arriving late must not drag a cancelled
+        // or ending membership back to active.
         await query(
           `update subscriptions
               set stripe_subscription_id = coalesce($2, stripe_subscription_id),
-                  status = 'active',
+                  status = case when status = 'pending_payment' then 'active'
+                                else status end,
                   updated_at = now()
             where id = $1`,
           [session.metadata.subscription_id, subscriptionId],
+        );
+
+        // The visits generated with it were held back for the same reason.
+        await query(
+          `update visits set status = 'scheduled'
+            where subscription_id = $1 and status = 'pending_payment'`,
+          [session.metadata.subscription_id],
         );
 
         if (customerId) {
@@ -110,7 +121,11 @@ async function handle(event: Stripe.Event): Promise<void> {
         const paymentIntent =
           typeof session.payment_intent === "string" ? session.payment_intent : null;
         await query(
-          `update visits set stripe_payment_intent_id = $2 where id = $1`,
+          `update visits
+              set stripe_payment_intent_id = $2,
+                  status = case when status = 'pending_payment' then 'scheduled'
+                                else status end
+            where id = $1`,
           [session.metadata.visit_id, paymentIntent],
         );
 
@@ -124,6 +139,37 @@ async function handle(event: Stripe.Event): Promise<void> {
 
         await sendOneTimeConfirmation(event.id, session.metadata.visit_id, session);
         await sendOwnerAlert(event.id, session.metadata.visit_id, "one_time", session);
+      }
+      break;
+    }
+
+    case "checkout.session.expired": {
+      // Stripe expires an abandoned session after 24 hours. Without this the
+      // unpaid booking would sit in the database for ever, and while nothing
+      // schedules it any more, it would still block the customer from booking
+      // and clutter every report.
+      const session = event.data.object;
+
+      if (session.metadata?.kind === "membership" && session.metadata.subscription_id) {
+        await query(
+          `update visits set status = 'canceled'
+            where subscription_id = $1 and status = 'pending_payment'`,
+          [session.metadata.subscription_id],
+        );
+        await query(
+          `update subscriptions
+              set status = 'canceled', ends_on = current_date, updated_at = now()
+            where id = $1 and status = 'pending_payment'`,
+          [session.metadata.subscription_id],
+        );
+      }
+
+      if (session.metadata?.kind === "one_time" && session.metadata.visit_id) {
+        await query(
+          `update visits set status = 'canceled'
+            where id = $1 and status = 'pending_payment'`,
+          [session.metadata.visit_id],
+        );
       }
       break;
     }

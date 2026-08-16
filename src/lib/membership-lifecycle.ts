@@ -58,7 +58,12 @@ export type SubscriptionRow = {
   id: string;
   customer_id: string;
   property_id: string;
-  status: "active" | "paused" | "pending_cancellation" | "canceled";
+  status:
+    | "pending_payment"
+    | "active"
+    | "paused"
+    | "pending_cancellation"
+    | "canceled";
   monthly_amount_cents: number;
   visits_per_period: number;
   pet_surcharge_cents: number;
@@ -267,11 +272,14 @@ export async function generateForSubscription(
       // bill a member every fortnight for the life of their membership.
       // Whether the property has pets is still on the property row, which is
       // what the cleaner's assignment reads.
+      // A visit is only real work once the membership behind it is paid for.
+      // Generating it as pending keeps unpaid bookings off the schedule, out
+      // of the reminder query and away from a cleaner's morning.
       await client.query(
         `insert into visits
            (customer_id, property_id, subscription_id, period_id, origin,
             service_type, status, scheduled_for, pet_surcharge_cents)
-         values ($4, $5, $6, $7, 'membership', 'standard', 'scheduled',
+         values ($4, $5, $6, $7, 'membership', 'standard', $8::visit_state,
                  ${timestamptzFromLocal(1, 2, 3)}, 0)`,
         [
           date,
@@ -281,6 +289,7 @@ export async function generateForSubscription(
           sub.property_id,
           sub.id,
           periodId,
+          sub.status === "pending_payment" ? "pending_payment" : "scheduled",
         ],
       );
       visitsCreated++;

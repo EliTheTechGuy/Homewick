@@ -94,7 +94,7 @@ export default async function AdminTodayPage({
        join customers c on c.id = v.customer_id
        left join cleaners cl on cl.id = v.assigned_cleaner_id
       where (v.scheduled_for at time zone $2)::date = $1::date
-        and v.status <> 'canceled'
+        and v.status not in ('canceled', 'pending_payment')
       order by v.scheduled_for`,
     [day, TIMEZONE],
   );
@@ -120,7 +120,7 @@ export default async function AdminTodayPage({
        from visits v
       where (v.scheduled_for at time zone $3)::date >= $1::date
         and (v.scheduled_for at time zone $3)::date <  $2::date
-        and v.status <> 'canceled'
+        and v.status not in ('canceled', 'pending_payment')
       group by 1`,
     [monthStart, monthEnd, TIMEZONE],
   );

@@ -1,0 +1,50 @@
+name: CI
+
+# Nothing was checking anything before a merge, so the 46 tests only ran when
+# somebody remembered. Two of the bugs found in the audit would have been
+# caught by a typecheck.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A second push to the same branch makes the first run pointless, so cancel it
+# rather than queueing behind it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Ordered cheapest first, so an obvious mistake fails in seconds rather
+      # than after a full build.
+      - name: Types
+        run: npx tsc --noEmit
+
+      - name: Tests
+        run: npm test
+
+      # The build is what actually runs in production, and it catches things
+      # the typecheck cannot, such as a page that cannot be prerendered.
+      #
+      # No secrets are exposed to it. Everything the build needs is either
+      # absent by design or a placeholder: the code is written so that a
+      # missing key disables a feature rather than throwing, which is what
+      # makes this safe to run on a fork's pull request.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.homewickcleaning.net

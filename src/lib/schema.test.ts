@@ -381,3 +381,141 @@ async function insertSubscription(
   );
   return rows[0].id;
 }
+
+test("an unpaid membership puts nothing on the schedule", async () => {
+  // The bug this guards: a booking used to be written as active before Stripe
+  // was ever contacted, so abandoning the payment page bought a free
+  // membership that generated visits and dispatched cleaners for ever.
+  const { customerId, propertyId } = await seedCustomer("unpaid@example.com");
+  const subscriptionId = await insertSubscription(
+    customerId,
+    propertyId,
+    "2026-01-15",
+    15,
+  );
+  await db.query(`update subscriptions set status = 'pending_payment' where id = $1`, [
+    subscriptionId,
+  ]);
+
+  const sub: SubscriptionRow = {
+    id: subscriptionId,
+    customer_id: customerId,
+    property_id: propertyId,
+    status: "pending_payment",
+    monthly_amount_cents: 26900,
+    visits_per_period: 2,
+    pet_surcharge_cents: 0,
+    preferred_weekday: 4,
+    preferred_weekday_second: null,
+    started_on: "2026-01-15",
+    billing_day: 15,
+    pending_amount_cents: null,
+    pending_amount_effective_on: null,
+    ends_on: null,
+  };
+
+  await generateForSubscription(asClient(db), sub, "2026-01-15");
+
+  const held = await db.query<{ status: string; n: number }>(
+    `select status::text as status, count(*)::int as n
+       from visits where subscription_id = $1 group by 1`,
+    [subscriptionId],
+  );
+
+  assert.deepEqual(
+    held.rows.map((r) => r.status),
+    ["pending_payment"],
+    "every generated visit must be held until the membership is paid for",
+  );
+
+  // The two queries that put a cleaner on a doorstep.
+  const onSchedule = await db.query<{ n: number }>(
+    `select count(*)::int as n from visits
+      where subscription_id = $1 and status not in ('canceled', 'pending_payment')`,
+    [subscriptionId],
+  );
+  assert.equal(onSchedule.rows[0].n, 0, "unpaid work must not reach the schedule");
+
+  const remindable = await db.query<{ n: number }>(
+    `select count(*)::int as n from visits
+      where subscription_id = $1 and status in ('scheduled', 'assigned')`,
+    [subscriptionId],
+  );
+  assert.equal(remindable.rows[0].n, 0, "unpaid work must not earn a reminder email");
+
+  // And the daily generator must not pick the subscription up at all.
+  const generated = await db.query<{ n: number }>(
+    `select count(*)::int as n from subscriptions
+      where id = $1 and status in ('active', 'pending_cancellation')`,
+    [subscriptionId],
+  );
+  assert.equal(generated.rows[0].n, 0, "an unpaid membership must not be topped up daily");
+});
+
+test("paying promotes the membership and releases its visits", async () => {
+  const { customerId, propertyId } = await seedCustomer("promoted@example.com");
+  const subscriptionId = await insertSubscription(
+    customerId,
+    propertyId,
+    "2026-01-15",
+    15,
+  );
+  await db.query(`update subscriptions set status = 'pending_payment' where id = $1`, [
+    subscriptionId,
+  ]);
+
+  const sub: SubscriptionRow = {
+    id: subscriptionId,
+    customer_id: customerId,
+    property_id: propertyId,
+    status: "pending_payment",
+    monthly_amount_cents: 26900,
+    visits_per_period: 2,
+    pet_surcharge_cents: 0,
+    preferred_weekday: 4,
+    preferred_weekday_second: null,
+    started_on: "2026-01-15",
+    billing_day: 15,
+    pending_amount_cents: null,
+    pending_amount_effective_on: null,
+    ends_on: null,
+  };
+  await generateForSubscription(asClient(db), sub, "2026-01-15");
+
+  // Exactly what the webhook runs on checkout.session.completed.
+  await db.query(
+    `update subscriptions
+        set status = case when status = 'pending_payment' then 'active' else status end
+      where id = $1`,
+    [subscriptionId],
+  );
+  await db.query(
+    `update visits set status = 'scheduled'
+      where subscription_id = $1 and status = 'pending_payment'`,
+    [subscriptionId],
+  );
+
+  const live = await db.query<{ n: number }>(
+    `select count(*)::int as n from visits
+      where subscription_id = $1 and status = 'scheduled'`,
+    [subscriptionId],
+  );
+  assert.ok(live.rows[0].n > 0, "paying must release the visits onto the schedule");
+
+  // A late or duplicate webhook must not resurrect a membership that has since
+  // been cancelled.
+  await db.query(`update subscriptions set status = 'canceled' where id = $1`, [
+    subscriptionId,
+  ]);
+  await db.query(
+    `update subscriptions
+        set status = case when status = 'pending_payment' then 'active' else status end
+      where id = $1`,
+    [subscriptionId],
+  );
+  const after = await db.query<{ status: string }>(
+    `select status::text as status from subscriptions where id = $1`,
+    [subscriptionId],
+  );
+  assert.equal(after.rows[0].status, "canceled", "promotion must only move forward");
+});
