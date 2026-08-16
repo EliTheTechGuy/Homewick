@@ -31,8 +31,18 @@ jobs:
 
       # Ordered cheapest first, so an obvious mistake fails in seconds rather
       # than after a full build.
+      #
+      # The script runs `next typegen` before tsc. Next generates the
+      # LayoutProps and PageProps globals from the route tree into .next/types,
+      # and a fresh checkout has no .next, so without it every layout and
+      # dynamic page fails to compile. Locally that is invisible, because a
+      # previous build has always left those types behind, which is exactly how
+      # this reached CI in the first place.
+      #
+      # Keeping it inside the npm script rather than as a separate step here
+      # means the command that runs locally is the command that runs in CI.
       - name: Types
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
       - name: Tests
         run: npm test

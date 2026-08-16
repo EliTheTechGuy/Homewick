@@ -11,7 +11,8 @@
     "db:check": "node scripts/check-db.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "member:link": "node scripts/member-login-link.mjs",
-    "email:test": "tsx scripts/send-test-email.mts"
+    "email:test": "tsx scripts/send-test-email.mts",
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "next": "16.3.0",
