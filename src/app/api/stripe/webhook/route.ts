@@ -4,8 +4,13 @@ import { query, queryOne } from "@/lib/db";
 import { TIMEZONE } from "@/lib/dates";
 import type { ServiceType, UnitSize } from "@/lib/pricing";
 import { sendOnce } from "@/lib/emails/send-once";
-import { membershipWelcomeEmail, oneTimeBookingEmail } from "@/lib/emails/templates";
+import {
+  membershipWelcomeEmail,
+  newBookingAlertEmail,
+  oneTimeBookingEmail,
+} from "@/lib/emails/templates";
 import { isStripeConfigured, stripe } from "@/lib/stripe";
+import { site } from "@/lib/site";
 
 /**
  * Stripe webhook. Stripe owns billing state; this endpoint copies the parts we
@@ -88,6 +93,17 @@ async function handle(event: Stripe.Event): Promise<void> {
         }
 
         await sendMembershipWelcome(event.id, session.metadata.subscription_id, session);
+
+        // The operator gets their own message, keyed on the member's first
+        // clean, since that is the job that needs a cleaner against it.
+        const first = await queryOne<{ id: string }>(
+          `select id from visits
+            where subscription_id = $1 and status in ('scheduled', 'assigned')
+            order by scheduled_for
+            limit 1`,
+          [session.metadata.subscription_id],
+        );
+        if (first) await sendOwnerAlert(event.id, first.id, "membership", session);
       }
 
       if (session.metadata?.kind === "one_time" && session.metadata.visit_id) {
@@ -107,6 +123,7 @@ async function handle(event: Stripe.Event): Promise<void> {
         }
 
         await sendOneTimeConfirmation(event.id, session.metadata.visit_id, session);
+        await sendOwnerAlert(event.id, session.metadata.visit_id, "one_time", session);
       }
       break;
     }
@@ -306,5 +323,85 @@ async function sendMembershipWelcome(
     });
   } catch (err) {
     console.error(`[email] membership welcome failed for ${subscriptionId}`, err);
+  }
+}
+
+/**
+ * Tell the operator a paid booking has landed.
+ *
+ * Separate from the customer's confirmation on purpose. That one is a receipt;
+ * this one is a job that needs a cleaner against it. Sending on payment rather
+ * than on submission means an abandoned checkout never pages anybody.
+ *
+ * Failure is swallowed. A missing alert costs the operator a look at the board;
+ * throwing here would make Stripe retry a payment we have already recorded.
+ */
+async function sendOwnerAlert(
+  eventId: string,
+  visitId: string,
+  kind: "membership" | "one_time",
+  session: Stripe.Checkout.Session,
+): Promise<void> {
+  if (!site.ownerEmail) return;
+
+  try {
+    const row = await queryOne<{
+      first_name: string;
+      last_name: string;
+      phone: string;
+      service_type: ServiceType;
+      unit_size: UnitSize;
+      has_pets: boolean;
+      on_date: string;
+      line1: string;
+      line2: string | null;
+      city: string;
+      postal_code: string;
+      customer_instructions: string | null;
+      add_ons: string[] | null;
+    }>(
+      `select c.first_name, c.last_name, c.phone,
+              v.service_type, p.unit_size, p.has_pets,
+              (v.scheduled_for at time zone $2)::date::text as on_date,
+              p.line1, p.line2, p.city, p.postal_code,
+              v.customer_instructions,
+              (select array_agg(a.name order by a.sort_order)
+                 from visit_add_ons va
+                 join add_ons a on a.id = va.add_on_id
+                where va.visit_id = v.id) as add_ons
+         from visits v
+         join customers c on c.id = v.customer_id
+         join properties p on p.id = v.property_id
+        where v.id = $1`,
+      [visitId, TIMEZONE],
+    );
+    if (!row) return;
+
+    // Keyed separately from the customer's email so one failing does not
+    // suppress the other, and so a Stripe retry cannot alert twice.
+    await sendOnce({
+      eventKey: `${eventId}:owner`,
+      kind: "owner_booking_alert",
+      to: site.ownerEmail,
+      customerId: null,
+      message: newBookingAlertEmail({
+        kind,
+        customerName: `${row.first_name} ${row.last_name}`,
+        customerPhone: row.phone,
+        serviceType: row.service_type,
+        unitSize: row.unit_size,
+        onDate: row.on_date,
+        address: [row.line1, row.line2, `${row.city}, TX ${row.postal_code}`]
+          .filter(Boolean)
+          .join(", "),
+        amountCents: session.amount_total ?? 0,
+        hasPets: row.has_pets,
+        addOns: row.add_ons ?? [],
+        instructions: row.customer_instructions,
+        adminUrl: `${site.url}/admin?date=${row.on_date}`,
+      }),
+    });
+  } catch (err) {
+    console.error(`[email] owner alert failed for visit ${visitId}`, err);
   }
 }

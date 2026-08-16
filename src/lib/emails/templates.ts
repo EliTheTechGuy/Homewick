@@ -237,3 +237,84 @@ export function membershipWelcomeEmail(params: {
       "Receipts and card changes are handled by Stripe. To cancel, get in touch. Membership needs 14 days' notice and we will confirm your end date.",
   });
 }
+
+/**
+ * A new paid booking, sent to the operator rather than the customer.
+ *
+ * The admin board only tells you what is happening if you are looking at it,
+ * and nobody watches a dashboard all day. This is the nudge that says a job
+ * arrived and needs a cleaner against it.
+ *
+ * Sent on payment, not on submission, so an abandoned checkout never pages
+ * anyone. Everything needed to act is in the message itself: what, where,
+ * when, and whether anything unusual came with it.
+ */
+export function newBookingAlertEmail(params: {
+  kind: "membership" | "one_time";
+  customerName: string;
+  customerPhone: string;
+  serviceType: ServiceType;
+  unitSize: UnitSize;
+  onDate: ISODate;
+  address: string;
+  amountCents: number;
+  hasPets: boolean;
+  addOns: string[];
+  instructions: string | null;
+  adminUrl: string;
+}): Composed {
+  const rows: Row[] = [
+    {
+      label: "Booking",
+      value:
+        params.kind === "membership"
+          ? "New membership, first clean below"
+          : "One-time clean",
+    },
+    { label: "When", value: formatLong(params.onDate) },
+    { label: "Where", value: params.address },
+    { label: "Apartment", value: unitSizeLabel(params.unitSize) },
+    { label: "Service", value: serviceTypeLabel(params.serviceType) },
+    { label: "Customer", value: `${params.customerName}, ${params.customerPhone}` },
+    { label: "Paid", value: formatCents(params.amountCents) },
+  ];
+
+  if (params.hasPets) rows.push({ label: "Pets", value: "Yes, at this address" });
+  if (params.addOns.length > 0) {
+    rows.push({ label: "Add-ons", value: params.addOns.join(", ") });
+  }
+
+  const body: string[] = [];
+  if (params.instructions) {
+    body.push(`<strong>They said:</strong> ${escapeText(params.instructions)}`);
+  }
+  body.push(
+    params.kind === "membership"
+      ? "This is a recurring member, so their second clean of the month is already on the board too."
+      : "One-time booking, so there is nothing recurring to set up.",
+  );
+
+  return compose({
+    subject: `New ${params.kind === "membership" ? "membership" : "booking"}: ${params.customerName}, ${formatLong(params.onDate)}`,
+    heading: "You have a new booking",
+    intro: `${params.customerName} has paid and is on the board for ${formatLong(params.onDate)}.`,
+    rows,
+    body,
+    cta: { label: "Open the day in admin", url: params.adminUrl },
+    footerNote:
+      "You are getting this because you run Homewick. Entry details are never included here; they stay in admin and are only revealed on the day.",
+  });
+}
+
+/**
+ * Customer text pasted into an operator email.
+ *
+ * Instructions are typed by the public, and the layout renders intro and body
+ * as HTML so a stray angle bracket would otherwise break the message.
+ */
+function escapeText(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
