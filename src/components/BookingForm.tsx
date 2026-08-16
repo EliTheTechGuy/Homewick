@@ -7,10 +7,11 @@ import { submitBooking } from "@/actions/booking";
 import { createCheckoutSession } from "@/actions/checkout";
 import { quoteFor } from "@/lib/booking-schema";
 import { formatCents } from "@/lib/money";
-import { WEEKDAYS, today, addDays } from "@/lib/dates";
+import { WEEKDAYS, today, addDays, addMonths, formatLong } from "@/lib/dates";
 import {
   ADD_ONS,
   FREE_PERK_ELIGIBLE,
+  MEMBERSHIP_PRICES,
   PET_SURCHARGE_CENTS,
   SERVICE_TYPES,
   UNIT_SIZES,
@@ -497,6 +498,23 @@ export function BookingForm({
               </div>
             ))}
           </dl>
+          {/* The recurring charge, at the same weight as the total and above it.
+              Somebody should not have to reach Stripe, or read the small print,
+              to find out what this costs every month. */}
+          {plan === "membership" && (
+            <div className="mt-5 flex justify-between gap-4 border-t border-hairline pt-4 text-sm">
+              <span className="text-body">
+                Then every month
+                <span className="mt-0.5 block text-xs text-muted">
+                  From {formatLong(addMonths(today(), 1))}, until you cancel
+                </span>
+              </span>
+              <span className="shrink-0 font-semibold text-navy">
+                {formatCents(MEMBERSHIP_PRICES[unitSize].monthlyCents)}
+              </span>
+            </div>
+          )}
+
           <div className="mt-5 flex justify-between border-t border-hairline pt-4">
             <span className="font-semibold text-navy">Due today</span>
             <span className="text-xl font-semibold text-accent">
@@ -505,8 +523,8 @@ export function BookingForm({
           </div>
           {plan === "membership" && (
             <p className="mt-4 text-xs leading-relaxed text-muted">
-              Your membership then renews monthly on this date. Cancel with 14 days&apos;
-              notice.
+              Two cleanings every month for that price. Cancel any time with 14
+              days&apos; notice, from your account or by getting in touch.
             </p>
           )}
 
