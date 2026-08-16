@@ -3,14 +3,16 @@ import Link from "next/link";
 /**
  * Admin was one page, so there was nowhere to navigate to and no nav.
  * Now that there are several, this is the spine.
- */
-/**
- * Only pages that exist. Members and history are coming, and a tab that leads
- * to a 404 is worse than a tab that is not there yet.
+ *
+ * Ordered by how often a day actually needs them: the schedule is the working
+ * screen, members and cleaners are reference, history is what you reach for
+ * when somebody rings up asking about a clean from three weeks ago.
  */
 const TABS = [
   { key: "day", href: "/admin", label: "Schedule" },
+  { key: "members", href: "/admin/members", label: "Members" },
   { key: "cleaners", href: "/admin/cleaners", label: "Cleaners" },
+  { key: "history", href: "/admin/history", label: "History" },
 ] as const;
 
 export function AdminNav({ current }: { current: (typeof TABS)[number]["key"] }) {
