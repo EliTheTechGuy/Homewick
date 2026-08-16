@@ -318,3 +318,85 @@ function escapeText(value: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 }
+
+/**
+ * The job, sent to the cleaner who has been put on it.
+ *
+ * Cleaners have no account, so this email is the entire interface: it has to
+ * carry everything needed to turn up prepared.
+ *
+ * Everything except the entry code. That sits behind the link, which only
+ * opens on the day and records who looked. A door code in an inbox is
+ * readable by anyone who ever gets into that inbox, stays readable after the
+ * person stops working here, and leaves no trace of having been read.
+ */
+export function cleanerAssignmentEmail(params: {
+  reason: "assigned" | "moved";
+  cleanerFirstName: string;
+  customerName: string;
+  customerPhone: string;
+  serviceType: ServiceType;
+  unitSize: UnitSize;
+  onDate: ISODate;
+  atTime: string;
+  address: string;
+  hasPets: boolean;
+  addOns: string[];
+  instructions: string | null;
+  jobUrl: string;
+  hasEntryDetails: boolean;
+}): Composed {
+  const moved = params.reason === "moved";
+
+  const rows: Row[] = [
+    { label: "When", value: `${formatLong(params.onDate)}, ${params.atTime}` },
+    { label: "Where", value: params.address },
+    { label: "Apartment", value: unitSizeLabel(params.unitSize) },
+    { label: "Job", value: serviceTypeLabel(params.serviceType) },
+    { label: "Customer", value: `${params.customerName}, ${params.customerPhone}` },
+  ];
+
+  if (params.hasPets) rows.push({ label: "Pets", value: "Yes, at this address" });
+  if (params.addOns.length > 0) {
+    rows.push({ label: "Also included", value: params.addOns.join(", ") });
+  }
+
+  const body: string[] = [];
+
+  if (moved) {
+    body.push(
+      "<strong>This one has moved.</strong> The date and time above are the new ones, so please update whatever you keep your days in.",
+    );
+  }
+
+  if (params.instructions) {
+    body.push(
+      `<strong>The customer asked:</strong> ${escapeText(params.instructions)}`,
+    );
+  }
+
+  body.push(
+    params.hasEntryDetails
+      ? "Entry details are on the job page, and they unlock on the morning of the visit. Open it when you arrive rather than the night before."
+      : "There are no entry details on file for this one, so expect to be let in.",
+  );
+
+  body.push(
+    "If you cannot make it, say so as early as you can so it can be moved to somebody else.",
+  );
+
+  return compose({
+    subject: moved
+      ? `Moved: ${params.customerName}, now ${formatLong(params.onDate)}`
+      : `New job: ${params.customerName}, ${formatLong(params.onDate)}`,
+    heading: moved ? "A job has moved" : `Hi ${params.cleanerFirstName}, new job`,
+    intro: moved
+      ? `${params.customerName}'s clean has been rescheduled. Here are the new details.`
+      : `You are on this one. Everything you need is below.`,
+    rows,
+    body,
+    cta: { label: "Open the job", url: params.jobUrl },
+    footerNote:
+      "This link is yours; it opens the job and shows entry details on the day. Do not forward it.",
+  });
+}

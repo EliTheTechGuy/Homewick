@@ -6,6 +6,8 @@ import { formatCents } from "@/lib/money";
 import { unitSizeLabel, type UnitSize } from "@/lib/pricing";
 import { RevealAccess } from "@/components/RevealAccess";
 import { MarkComplete } from "@/components/MarkComplete";
+import { AssignCleaner, type CleanerOption } from "@/components/admin/AssignCleaner";
+import { AdminNav } from "@/components/admin/AdminNav";
 
 export const metadata: Metadata = { title: "Today", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -32,6 +34,7 @@ type VisitRow = {
   addons_amount_cents: number;
   add_ons: { name: string; is_free_perk: boolean }[] | null;
   cleaner_name: string | null;
+  assigned_cleaner_id: string | null;
 };
 
 export default async function AdminTodayPage({
@@ -72,6 +75,7 @@ export default async function AdminTodayPage({
             p.unit_size, p.has_pets, p.line1, p.line2, p.city, p.postal_code,
             c.first_name, c.last_name, c.phone,
             cl.first_name || ' ' || cl.last_name as cleaner_name,
+            v.assigned_cleaner_id,
             (select json_agg(json_build_object('name', a.name,
                                                'is_free_perk', va.is_free_perk)
                              order by a.sort_order)
@@ -88,11 +92,22 @@ export default async function AdminTodayPage({
     [day, TIMEZONE],
   );
 
+  // The roster is loaded once here rather than per visit, so the assign
+  // control on every card shares one query.
+  const roster = await query<{ id: string; name: string }>(
+    `select id, first_name || ' ' || last_name as name
+       from cleaners
+      where is_active = true
+      order by first_name, last_name`,
+  );
+  const cleaners: CleanerOption[] = roster;
+
   return (
-    <div className="mx-auto max-w-5xl px-5 py-12">
-      <div className="flex flex-wrap items-baseline justify-between gap-4">
+    <div className="mx-auto max-w-5xl px-5 py-10">
+      <AdminNav current="day" />
+      <div className="mt-6 flex flex-wrap items-baseline justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold text-navy">Today</h1>
+          <h1 className="text-3xl font-semibold text-navy">Schedule</h1>
           <p className="mt-1 text-muted">{formatLong(day)}</p>
         </div>
         <p className="text-sm text-muted">
@@ -185,12 +200,11 @@ export default async function AdminTodayPage({
                   <RevealAccess visitId={visit.id} propertyId={visit.property_id} />
                   {visit.status !== "completed" && <MarkComplete visitId={visit.id} />}
                 </div>
-                <p className="text-sm text-muted">
-                  Cleaner:{" "}
-                  <span className="font-medium text-body">
-                    {visit.cleaner_name ?? "unassigned"}
-                  </span>
-                </p>
+                <AssignCleaner
+                  visitId={visit.id}
+                  assignedId={visit.assigned_cleaner_id}
+                  cleaners={cleaners}
+                />
               </div>
             </li>
           ))}
