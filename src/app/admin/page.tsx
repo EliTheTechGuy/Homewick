@@ -8,8 +8,11 @@ import { RevealAccess } from "@/components/RevealAccess";
 import { MarkComplete } from "@/components/MarkComplete";
 import { AssignCleaner, type CleanerOption } from "@/components/admin/AssignCleaner";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { MonthCalendar, type DayCount } from "@/components/admin/MonthCalendar";
+import { UpcomingRail, type UpcomingRow } from "@/components/admin/UpcomingRail";
+import { addDays, addMonths, isISODate } from "@/lib/dates";
 
-export const metadata: Metadata = { title: "Today", robots: { index: false } };
+export const metadata: Metadata = { title: "Schedule", robots: { index: false } };
 export const dynamic = "force-dynamic";
 
 type VisitRow = {
@@ -64,7 +67,9 @@ export default async function AdminTodayPage({
   }
 
   const { date } = await searchParams;
-  const day = date ?? today();
+  // A hand-edited or stale date must not reach Postgres as a cast, which would
+  // throw and render an unstyled crash rather than a working screen.
+  const day = date && isISODate(date) ? date : today();
 
   const visits = await query<VisitRow>(
     `select v.id, v.property_id, v.status::text as status, v.origin::text as origin,
@@ -102,13 +107,69 @@ export default async function AdminTodayPage({
   );
   const cleaners: CleanerOption[] = roster;
 
+  // One row per day of the visible month, so the calendar can show how much
+  // work each day carries and which days still need somebody on them.
+  const monthStart = `${day.slice(0, 7)}-01`;
+  const monthEnd = addMonths(monthStart, 1);
+  const counts = await query<DayCount>(
+    `select (v.scheduled_for at time zone $3)::date::text as on_date,
+            count(*)::int as total,
+            count(*) filter (where v.assigned_cleaner_id is null)::int as unassigned
+       from visits v
+      where (v.scheduled_for at time zone $3)::date >= $1::date
+        and (v.scheduled_for at time zone $3)::date <  $2::date
+        and v.status <> 'canceled'
+      group by 1`,
+    [monthStart, monthEnd, TIMEZONE],
+  );
+
+  // Deliberately anchored to today rather than to the selected day: this
+  // answers "what is next", which does not change because somebody clicked
+  // back to last Tuesday.
+  const from = today();
+  const upcoming = await query<UpcomingRow>(
+    `select v.id,
+            (v.scheduled_for at time zone $2)::date::text as on_date,
+            to_char(v.scheduled_for at time zone $2, 'HH12:MI AM') as at_time,
+            c.first_name, c.last_name, p.line1,
+            cl.first_name || ' ' || cl.last_name as cleaner_name
+       from visits v
+       join customers c on c.id = v.customer_id
+       join properties p on p.id = v.property_id
+       left join cleaners cl on cl.id = v.assigned_cleaner_id
+      where (v.scheduled_for at time zone $2)::date >= $1::date
+        and v.status in ('scheduled', 'assigned')
+      order by v.scheduled_for
+      limit 12`,
+    [from, TIMEZONE],
+  );
+
   return (
-    <div className="mx-auto max-w-5xl px-5 py-10">
+    <div className="mx-auto max-w-[1400px] px-5 py-10">
       <AdminNav current="day" />
-      <div className="mt-6 flex flex-wrap items-baseline justify-between gap-4">
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_300px]">
+        {/* Calendar. Sticky on wide screens so it stays put while a long day scrolls. */}
+        <div className="lg:sticky lg:top-6 lg:self-start">
+          <MonthCalendar month={day} selected={day} today={from} counts={counts} />
+          {day !== from && (
+            <a
+              href={`/admin?date=${from}`}
+              className="mt-3 block text-center text-sm font-medium text-accent hover:underline"
+            >
+              Back to today
+            </a>
+          )}
+        </div>
+
+        {/* The selected day. */}
+        <div className="min-w-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold text-navy">Schedule</h1>
-          <p className="mt-1 text-muted">{formatLong(day)}</p>
+          <h1 className="text-3xl font-semibold text-navy">{formatLong(day)}</h1>
+          <p className="mt-1 text-muted">
+            {day === from ? "Today" : day === addDays(from, 1) ? "Tomorrow" : "Selected day"}
+          </p>
         </div>
         <p className="text-sm text-muted">
           {visits.length} {visits.length === 1 ? "visit" : "visits"}
@@ -116,11 +177,11 @@ export default async function AdminTodayPage({
       </div>
 
       {visits.length === 0 ? (
-        <p className="mt-12 rounded-2xl border border-hairline bg-panel p-8 text-center text-muted">
-          Nothing scheduled.
+        <p className="mt-8 rounded-2xl border border-hairline bg-panel p-8 text-center text-muted">
+          Nothing scheduled on this day.
         </p>
       ) : (
-        <ul className="mt-10 space-y-5">
+        <ul className="mt-6 space-y-5">
           {visits.map((visit) => (
             <li
               key={visit.id}
@@ -210,6 +271,13 @@ export default async function AdminTodayPage({
           ))}
         </ul>
       )}
+        </div>
+
+        {/* What is next, independent of which day is selected. */}
+        <div className="xl:sticky xl:top-6 xl:self-start">
+          <UpcomingRail rows={upcoming} from={from} />
+        </div>
+      </div>
     </div>
   );
 }
