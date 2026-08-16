@@ -14,7 +14,7 @@ const steps = [
   {
     n: "02",
     title: "We schedule your two visits",
-    body: "Pick a preferred weekday. Your visits are placed inside your billing period and confirmed by text.",
+    body: "Pick a preferred weekday. Your visits are placed inside your billing period and confirmed by email.",
   },
   {
     n: "03",

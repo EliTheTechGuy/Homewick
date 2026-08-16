@@ -40,7 +40,7 @@ export function oneTimeBookingEmail(params: {
     intro: "Your cleaning is booked. Here are the details.",
     rows,
     body: [
-      "We will text you the arrival window the day before. Your cleaner has the entry details you gave us, and nobody else does.",
+      "We will email you a reminder the morning before. Your cleaner has the entry details you gave us, and nobody else does.",
       "If anything is wrong after we have been, tell us within 48 hours and we will come back and put it right.",
     ],
     footerNote:

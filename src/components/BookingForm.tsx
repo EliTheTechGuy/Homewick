@@ -354,7 +354,7 @@ export function BookingForm({
               </select>
               <span className="mt-2 block text-sm text-muted">
                 Your two visits are placed roughly two weeks apart inside each billing
-                period. We confirm exact dates by text.
+                period. We confirm exact dates by email.
               </span>
             </label>
           ) : (
@@ -368,7 +368,7 @@ export function BookingForm({
                 className="mt-2 w-full rounded-xl border border-hairline bg-white px-4 py-3 text-body"
               />
               <span className="mt-2 block text-sm text-muted">
-                We confirm the exact time by text before the visit.
+                We confirm the exact time by email before the visit.
               </span>
             </label>
           )}
@@ -463,10 +463,11 @@ export function BookingForm({
           <label className="flex cursor-pointer gap-3">
             <input type="checkbox" name="smsConsent" className="mt-1 h-4 w-4 accent-[#1F5FA6]" />
             <span className="text-sm leading-relaxed text-body">
-              Text me about my service, covering scheduling confirmations, day-before and arrival
-              notices, and a short feedback request after a visit. Message frequency
-              varies; message and data rates may apply. Reply STOP to unsubscribe or HELP
-              for help. Consent is not a condition of purchase.
+              Text me about my service once texting is available, covering scheduling and
+              day-before notices. We do not send texts today, and everything about your
+              booking comes by email for now. Message frequency will vary; message and data
+              rates may apply. Reply STOP to unsubscribe or HELP for help. Consent is not a
+              condition of purchase.
             </span>
           </label>
           <label className="mt-4 flex cursor-pointer gap-3">
