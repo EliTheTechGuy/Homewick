@@ -63,7 +63,7 @@ export default async function MembersPage() {
               on sp.subscription_id = s.id
              and sp.period_start <= (now() at time zone $1)::date
              and sp.period_end   >  (now() at time zone $1)::date
-      where s.status <> 'canceled'
+      where s.status in ('active', 'paused', 'pending_cancellation')
       order by c.first_name, c.last_name`,
     [TIMEZONE],
   );

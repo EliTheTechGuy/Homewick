@@ -172,17 +172,31 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
       const petSurcharge = input.hasPets ? PET_SURCHARGE_CENTS : 0;
 
       if (input.plan === "membership") {
-        // One live membership per customer.
-        //
-        // Without this, somebody who reached Stripe, abandoned it and came back
-        // to fill the form again ended up with two subscription rows. Every
-        // member-facing lookup takes the newest one, so the account page showed
-        // a single membership and cancelling cancelled a single membership,
-        // while the older row carried on billing with no screen anywhere that
-        // could see it or stop it.
+        // An earlier attempt that never got paid for is replaced, not kept.
+        // Somebody who reached Stripe, closed the tab and came back to fill the
+        // form in again should end up with one membership, and the abandoned
+        // row should not sit there blocking them.
+        await client.query(
+          `update visits set status = 'canceled'
+            where subscription_id in (
+              select id from subscriptions
+               where customer_id = $1 and status = 'pending_payment'
+            )`,
+          [customerId],
+        );
+        await client.query(
+          `update subscriptions
+              set status = 'canceled', ends_on = current_date, updated_at = now()
+            where customer_id = $1 and status = 'pending_payment'`,
+          [customerId],
+        );
+
+        // One live membership per customer. Deliberately does not count an
+        // unpaid attempt, which has just been cleared above.
         const { rows: existing } = await client.query<{ id: string }>(
           `select id from subscriptions
-            where customer_id = $1 and status <> 'canceled'
+            where customer_id = $1
+              and status in ('active', 'paused', 'pending_cancellation')
             limit 1
             for update`,
           [customerId],
@@ -202,7 +216,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
              (customer_id, property_id, unit_size, status, monthly_amount_cents,
               visits_per_period, pet_surcharge_cents, preferred_weekday,
               started_on, billing_day)
-           values ($1, $2, $3, 'active', $4, $5, $6, $7, $8, $9)
+           values ($1, $2, $3, 'pending_payment', $4, $5, $6, $7, $8, $9)
            returning id`,
           [
             customerId,
@@ -225,7 +239,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
           id: subscriptionId,
           customer_id: customerId,
           property_id: propertyId,
-          status: "active",
+          status: "pending_payment",
           monthly_amount_cents: MEMBERSHIP_PRICES[input.unitSize].monthlyCents,
           visits_per_period: VISITS_PER_PERIOD,
           pet_surcharge_cents: 0,
@@ -256,7 +270,8 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
                   customer_instructions = $3
             where id = (
               select id from visits
-               where subscription_id = $1 and status = 'scheduled'
+               where subscription_id = $1
+                 and status in ('pending_payment', 'scheduled')
                order by scheduled_for
                limit 1
             )`,
@@ -275,7 +290,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
            (customer_id, property_id, origin, service_type, status,
             scheduled_for, base_amount_cents, pet_surcharge_cents,
             customer_instructions)
-         values ($4, $5, 'one_off', $6, 'scheduled',
+         values ($4, $5, 'one_off', $6, 'pending_payment',
                  ${timestamptzFromLocal(1, 2, 3)}, $7, $8, $9)
          returning id`,
         [
@@ -329,7 +344,8 @@ async function attachAddOns(
 ): Promise<void> {
   const { rows } = await client.query<{ id: string; period_id: string | null }>(
     `select id, period_id from visits
-      where subscription_id = $1 and status = 'scheduled'
+      where subscription_id = $1
+        and status in ('pending_payment', 'scheduled')
       order by scheduled_for
       limit 1`,
     [subscriptionId],
