@@ -15,13 +15,19 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  // Vercel Cron sends this header; a plain GET from the internet must not run it.
+  // Vercel Cron sends this header; a plain GET from the internet must not run
+  // it. A missing secret refuses the request rather than skipping the check.
+  // "No secret is configured" and "anybody may run this" are very different
+  // things, and the old form conflated them: any environment without the
+  // variable, most likely a preview deployment pointing at the same database,
+  // was a public URL that wrote to the schedule.
   const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = request.headers.get("authorization");
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (!secret) {
+    console.error("[cron] CRON_SECRET is not set; refusing to run.");
+    return NextResponse.json({ error: "Unavailable." }, { status: 503 });
+  }
+  if (request.headers.get("authorization") !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   if (!isDatabaseConfigured()) {
