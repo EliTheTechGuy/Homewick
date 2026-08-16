@@ -38,7 +38,7 @@ function newToken(): string {
 }
 
 export type LinkRequest =
-  | { sent: true; url: string; email: string }
+  | { sent: true; url: string; email: string; tokenId: string; customerId: string }
   | { sent: false; reason: "unknown_email" | "rate_limited" };
 
 /**
@@ -73,15 +73,21 @@ export async function createLoginLink(
   }
 
   const token = newToken();
-  await query(
+  // The row id comes back so the caller can record the send against it. Each
+  // request mints its own token, so that id is a natural unique key for the
+  // delivery log without making a second request look like a duplicate.
+  const created = await queryOne<{ id: string }>(
     `insert into member_login_tokens (customer_id, token_hash, expires_at, requested_ip)
-     values ($1, $2, now() + ($3 || ' minutes')::interval, $4)`,
+     values ($1, $2, now() + ($3 || ' minutes')::interval, $4)
+     returning id`,
     [customer.id, hash(token), String(LINK_MINUTES), ip],
   );
 
   return {
     sent: true,
     email,
+    tokenId: created!.id,
+    customerId: customer.id,
     url: `${baseUrl}/account/verify?token=${encodeURIComponent(token)}`,
   };
 }

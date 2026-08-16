@@ -3,7 +3,7 @@
 import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { transaction, queryOne, isDatabaseConfigured } from "@/lib/db";
+import { transaction, query, queryOne, isDatabaseConfigured } from "@/lib/db";
 import {
   SESSION_COOKIE,
   consumeLoginToken,
@@ -58,6 +58,21 @@ export async function requestLoginLink(
     if (result.sent) {
       const { subject, text } = signInEmail(result.url);
       const { delivered } = await sendEmail({ to: result.email, subject, text });
+
+      // Recorded like every other email, so "I never got my link" is a
+      // question with an answer. Keyed on the token row rather than the
+      // customer, because asking twice must send twice and each request needs
+      // its own line rather than colliding with the last one.
+      //
+      // Written after the attempt, not before, so the row carries whether it
+      // actually went. A failure here must not swallow a link that was sent.
+      await query(
+        `insert into email_deliveries (event_key, kind, customer_id, recipient, delivered)
+         values ($1, 'member_sign_in', $2, $3, $4)
+         on conflict (event_key, kind) do nothing`,
+        [`login:${result.tokenId}`, result.customerId, result.email, delivered],
+      ).catch((err) => console.error("[account] could not record sign-in email", err));
+
       if (!delivered) {
         // The link is valid regardless; it is in the server log for an
         // operator to pass on. Do not surface that to the visitor.

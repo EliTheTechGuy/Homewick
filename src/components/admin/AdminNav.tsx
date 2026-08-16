@@ -15,6 +15,7 @@ const TABS = [
   { key: "cleaners", href: "/admin/cleaners", label: "Cleaners" },
   { key: "feedback", href: "/admin/feedback", label: "Feedback" },
   { key: "history", href: "/admin/history", label: "History" },
+  { key: "emails", href: "/admin/emails", label: "Emails" },
 ] as const;
 
 export async function AdminNav({ current }: { current: (typeof TABS)[number]["key"] }) {
