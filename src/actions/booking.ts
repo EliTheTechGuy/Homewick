@@ -86,14 +86,24 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
   try {
     const bookingRef = await transaction(async (client) => {
       // Customer, a repeat booker keeps their existing record.
+      //
+      // Deliberately does NOT overwrite the name or phone number of somebody
+      // who already exists. This form is public and unauthenticated, so anyone
+      // who knew a customer's email address could otherwise book under it and
+      // silently replace that customer's contact details. The admin view
+      // renders the phone number as click to call, so the failure mode was a
+      // cleaner standing at a customer's door ringing a stranger.
+      //
+      // A genuine change of name or number now goes through the account, where
+      // the person has proved they control the address.
+      //
+      // Consent is only ever added, never withdrawn: a booking submitted
+      // without the box ticked is not an instruction to stop texting.
       const { rows: customerRows } = await client.query<{ id: string }>(
         `insert into customers (first_name, last_name, email, phone, sms_consent_at)
          values ($1, $2, $3, $4, $5)
          on conflict (email) do update
-           set first_name = excluded.first_name,
-               last_name  = excluded.last_name,
-               phone      = excluded.phone,
-               sms_consent_at = coalesce(excluded.sms_consent_at, customers.sms_consent_at),
+           set sms_consent_at = coalesce(excluded.sms_consent_at, customers.sms_consent_at),
                updated_at = now()
          returning id`,
         [
@@ -162,6 +172,28 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
       const petSurcharge = input.hasPets ? PET_SURCHARGE_CENTS : 0;
 
       if (input.plan === "membership") {
+        // One live membership per customer.
+        //
+        // Without this, somebody who reached Stripe, abandoned it and came back
+        // to fill the form again ended up with two subscription rows. Every
+        // member-facing lookup takes the newest one, so the account page showed
+        // a single membership and cancelling cancelled a single membership,
+        // while the older row carried on billing with no screen anywhere that
+        // could see it or stop it.
+        const { rows: existing } = await client.query<{ id: string }>(
+          `select id from subscriptions
+            where customer_id = $1 and status <> 'canceled'
+            limit 1
+            for update`,
+          [customerId],
+        );
+        if (existing[0]) {
+          return {
+            formError:
+              "You already have a membership with us. Sign in to your account to change or cancel it, and get in touch if something does not look right.",
+          } as const;
+        }
+
         const startedOn = today();
         const billingDay = Math.min(Number(startedOn.slice(8, 10)), 28);
 
@@ -262,6 +294,12 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
       await attachOneOffAddOns(client, visitRows[0].id, input);
       return visitRows[0].id;
     });
+
+    // A refusal rather than a reference: the booking was rejected on a rule,
+    // not a failure, so it carries its own message instead of the generic one.
+    if (typeof bookingRef !== "string") {
+      return { ok: false, fieldErrors: {}, formError: bookingRef.formError };
+    }
 
     return {
       ok: true,

@@ -60,9 +60,16 @@ export function visitReminderEmail(params: {
   onDate: ISODate;
   address: string;
   freeAddOnName: string | null;
+  /**
+   * Normally "tomorrow". Falls back to "today" when a reminder is going out on
+   * the morning itself, which happens if the previous day's run failed. Saying
+   * "tomorrow" then would send somebody out on the wrong day.
+   */
+  when?: "today" | "tomorrow";
 }): Composed {
+  const when = params.when ?? "tomorrow";
   const rows: Row[] = [
-    { label: "Tomorrow", value: formatLong(params.onDate) },
+    { label: when === "today" ? "Today" : "Tomorrow", value: formatLong(params.onDate) },
     { label: "Where", value: params.address },
   ];
 
@@ -71,16 +78,18 @@ export function visitReminderEmail(params: {
   }
 
   return compose({
-    subject: `Your cleaning is tomorrow, ${formatLong(params.onDate)}`,
-    heading: "Your cleaning is tomorrow",
-    intro: `Hi ${params.firstName}. A quick reminder so nothing catches you out tomorrow.`,
+    subject: `Your cleaning is ${when}, ${formatLong(params.onDate)}`,
+    heading: `Your cleaning is ${when}`,
+    intro: `Hi ${params.firstName}. A quick reminder so nothing catches you out.`,
     rows,
     body: [
       "Please make sure we can get in, and that the entry details you gave us are still current. If a code has changed, let us know today.",
       "It helps if floors are clear of anything that needs putting away first, though we will work around whatever is there.",
     ],
     footerNote:
-      "Need to move this one? Get in touch today and we will find another slot.",
+      when === "today"
+        ? "Need to move this one? Get in touch as soon as you can and we will find another slot."
+        : "Need to move this one? Get in touch today and we will find another slot.",
   });
 }
 

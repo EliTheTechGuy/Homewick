@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import { addDays, addMonths, daysBetween, firstWeekdayOnOrAfter, today } from "./dates";
+import { visitReminderEmail } from "./emails/templates";
 import {
   cancellationEndDate,
   periodContaining,
@@ -409,4 +410,44 @@ test("differing weekdays never push a cleaning into the next period", () => {
       }
     }
   }
+});
+
+test("a moved cleaning earns a reminder for its new day", () => {
+  // The dedupe key is what decides whether a reminder is sent again. Keying on
+  // the visit alone meant that moving a cleaning after its reminder had gone
+  // sent nothing for the day somebody actually turned up.
+  const visitId = "5f0f4b1e-0000-4000-8000-000000000001";
+  const key = (onDate: string) => `visit:${visitId}:${onDate}`;
+
+  assert.notEqual(
+    key("2026-08-20"),
+    key("2026-08-25"),
+    "a rescheduled cleaning must not reuse the old reminder claim",
+  );
+  assert.equal(
+    key("2026-08-20"),
+    key("2026-08-20"),
+    "a repeated run on the same day must still dedupe",
+  );
+});
+
+test("the reminder says today when it goes out on the morning itself", () => {
+  const shared = {
+    firstName: "Sam",
+    address: "1200 Main St, Dallas, TX 75201",
+    freeAddOnName: null,
+  };
+
+  const tomorrow = visitReminderEmail({ ...shared, onDate: "2026-08-20" });
+  assert.match(tomorrow.subject, /tomorrow/);
+  assert.match(tomorrow.text, /Tomorrow/);
+
+  // Reached when the previous day's run failed and the backfill catches it.
+  const sameDay = visitReminderEmail({ ...shared, onDate: "2026-08-20", when: "today" });
+  assert.match(sameDay.subject, /today/);
+  assert.doesNotMatch(
+    sameDay.subject,
+    /tomorrow/,
+    "a same-morning reminder must not tell somebody the wrong day",
+  );
 });

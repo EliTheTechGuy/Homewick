@@ -136,7 +136,19 @@ async function sendFeedbackRequests(): Promise<number> {
   return sent;
 }
 
-/** Reminders for every cleaning happening tomorrow, member or not. */
+/**
+ * Reminders for every cleaning happening tomorrow, member or not.
+ *
+ * The window covers today as well as tomorrow. Looking only at tomorrow meant
+ * that a run which failed, or was skipped, or hit a mail provider having a bad
+ * morning, lost those reminders permanently: the next day's run asked about
+ * its own tomorrow and yesterday's visits were already behind it. The retry
+ * machinery in sendOnce was there, but no query would ever have picked them up
+ * again.
+ *
+ * A same-morning reminder is worth sending. The alternative is a cleaner
+ * standing outside a flat whose occupant was never told.
+ */
 async function sendVisitReminders(from: ISODate): Promise<number> {
   const tomorrow = addDays(from, 1);
 
@@ -163,23 +175,29 @@ async function sendVisitReminders(from: ISODate): Promise<number> {
        from visits v
        join customers c on c.id = v.customer_id
        join properties p on p.id = v.property_id
-      where (v.scheduled_for at time zone $2)::date = $1::date
+      where (v.scheduled_for at time zone $2)::date between $1::date and $3::date
         and v.status in ('scheduled', 'assigned')`,
-    [tomorrow, TIMEZONE],
+    [from, TIMEZONE, tomorrow],
   );
 
   let sent = 0;
   for (const visit of visits) {
-    // Keyed on the visit, so the reminder cannot be sent twice even if the
-    // job runs again.
+    // Keyed on the visit AND the day it currently falls on, so the job can run
+    // again without sending twice, while a cleaning that has been moved still
+    // earns a reminder for its new day.
+    //
+    // Keying on the visit alone meant that a member who moved a cleaning after
+    // its reminder had already gone out received a reminder for a day when
+    // nothing happened, and nothing at all for the day somebody turned up.
     const result = await sendOnce({
-      eventKey: `visit:${visit.visit_id}`,
+      eventKey: `visit:${visit.visit_id}:${visit.on_date}`,
       kind: "visit_reminder",
       to: visit.email,
       customerId: visit.customer_id,
       message: visitReminderEmail({
         firstName: visit.first_name,
         onDate: visit.on_date,
+        when: visit.on_date === from ? "today" : "tomorrow",
         address: [visit.line1, visit.line2, `${visit.city}, TX ${visit.postal_code}`]
           .filter(Boolean)
           .join(", "),
