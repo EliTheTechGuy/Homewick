@@ -17,4 +17,4 @@ export const site = {
 } as const;
 
 /** Bumped whenever the service agreement text changes; recorded on acceptance. */
-export const TERMS_VERSION = "2026-08-13";
+export const TERMS_VERSION = "2026-08-16";

@@ -152,14 +152,20 @@ export default function TermsPage() {
             </p>
           </Clause>
 
-          <Clause n="9" title="Text messages">
+          <Clause n="9" title="How we contact you">
             <p>
-              If you consent at booking, we will send service text messages covering scheduling
-              confirmations, day-before and arrival notices, completion notices, and a short
-              feedback request after a visit. Message frequency varies by how often you are
-              cleaned. Message and data rates may apply. Reply STOP at any time to
-              unsubscribe, or HELP for assistance. Consent to service messages is not a
-              condition of purchase, and we do not send marketing messages on this basis.
+              We contact you by email about your service: your booking confirmation, a
+              reminder the morning before a visit, and anything we need to ask you about
+              access. These are notifications rather than a support channel, so replies to
+              them are not monitored.
+            </p>
+            <p>
+              We do not currently send text messages. If you ticked the box at booking we
+              have recorded your consent, and if we introduce text notifications later they
+              will cover scheduling only. Message frequency would vary by how often you are
+              cleaned, message and data rates may apply, and you would be able to reply STOP
+              at any time to unsubscribe or HELP for assistance. Consent is not a condition
+              of purchase, and we do not send marketing messages on this basis.
             </p>
           </Clause>
 

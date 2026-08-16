@@ -53,8 +53,8 @@ export default async function ConfirmedPage({
           </>
         ) : (
           <p className="mt-4 text-lg leading-relaxed text-muted">
-            We have your details. You will get a text confirming the date and arrival
-            window before your first visit.
+            We have your details. Your confirmation is on its way by email, and we
+            will email you again the morning before your visit.
           </p>
         )}
 
