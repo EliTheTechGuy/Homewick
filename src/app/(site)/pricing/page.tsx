@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { ButtonLink, Card, Section, SectionHeading } from "@/components/ui";
 import { PricingTable } from "@/components/PricingTable";
 import { MembershipCards } from "@/components/MembershipCards";
@@ -35,6 +36,19 @@ export default function PricingPage() {
         </p>
         <MembershipCards className="mt-10" />
       </Section>
+
+      {/* A break between three tables in a row. Decorative next to pricing
+          that already says everything, so the alt is empty rather than making
+          a screen reader sit through a description on the way to the numbers. */}
+      <div className="relative h-52 w-full md:h-64">
+        <Image
+          src="/photography/living-room.jpg"
+          alt=""
+          fill
+          sizes="100vw"
+          className="object-cover"
+        />
+      </div>
 
       <Section tinted>
         <h2 className="text-2xl font-semibold text-navy">Add-ons</h2>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { ButtonLink, Card, CheckIcon, Section, SectionHeading } from "@/components/ui";
 import { MembershipCards } from "@/components/MembershipCards";
 import { formatCents } from "@/lib/money";
@@ -62,6 +63,16 @@ export default function MembershipPage() {
         />
         <MembershipCards className="mt-12" />
       </Section>
+
+      <div className="relative h-52 w-full md:h-64">
+        <Image
+          src="/photography/sofa.jpg"
+          alt=""
+          fill
+          sizes="100vw"
+          className="object-cover"
+        />
+      </div>
 
       <Section tinted>
         <div className="grid gap-12 md:grid-cols-2">

@@ -20,6 +20,8 @@ apartment we actually cleaned beats any of them.
 | bedroom.jpg | https://www.pexels.com/photo/90317/ |
 | towels.jpg | https://www.pexels.com/photo/4210372/ |
 | bathroom.jpg | https://www.pexels.com/photo/29559666/ |
+| living-room.jpg | https://www.pexels.com/photo/15743373/ |
+| sofa.jpg | https://www.pexels.com/photo/4352247/ |
 
 None contains an identifiable person, which also keeps us clear of any
 model-release question.
