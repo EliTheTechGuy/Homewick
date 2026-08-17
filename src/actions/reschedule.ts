@@ -34,6 +34,8 @@ type Client = Parameters<Parameters<typeof transaction>[0]>[0];
  *
  * Visits that are already assigned to a cleaner are skipped too. Those are
  * committed work, so they get moved deliberately rather than as a side effect.
+ * Skipping one must not shift the others, which is why a visit is found by
+ * its stored slot rather than by counting along the period.
  */
 async function realignFuturePeriods(
   client: Client,
@@ -49,6 +51,11 @@ async function realignFuturePeriods(
 
   const weekdays = [prefs.preferred_weekday, prefs.preferred_weekday_second];
   const from = today();
+  // The same notice a member has to give applies to a move they did not ask
+  // for. A period starting tomorrow qualifies as "not started yet", so
+  // without a floor its cleaning could be pulled to tomorrow, which is a rule
+  // this very file enforces against the member two hundred lines below.
+  const notBefore = addDays(from, MIN_LEAD_DAYS);
 
   const { rows: periods } = await client.query<{
     id: string;
@@ -68,20 +75,38 @@ async function realignFuturePeriods(
       { start: period.period_start, end: period.period_end },
       weekdays,
       prefs.visits_per_period,
+      notBefore,
     );
     const target = wanted[slot];
     if (!target) continue;
 
-    const { rows: visits } = await client.query<{ id: string }>(
-      `select id from visits
-        where period_id = $1
-          and status = 'scheduled'
-        order by scheduled_for
-        offset $2 limit 1
+    // Found by its stored slot rather than by counting scheduled visits.
+    // Counting skipped assigned ones, which shifted every later offset: a
+    // September period whose first clean was already assigned would have its
+    // *second* one moved into the first week, collapsing both into one
+    // fortnight and losing the member half a month of service.
+    const { rows: visits } = await client.query<{ id: string; status: string }>(
+      `select id, status::text as status from visits
+        where period_id = $1 and slot = $2 and status <> 'canceled'
+        limit 1
         for update`,
       [period.id, slot],
     );
     if (!visits[0]) continue;
+
+    // Assigned work is somebody's day already planned. Skipped, not moved,
+    // and skipping it must not shift anything else, which is why the lookup
+    // above is by slot rather than by position.
+    if (visits[0].status === "assigned") continue;
+
+    // Nothing to do, and writing anyway would stamp a reschedule trail on a
+    // visit that never moved.
+    const { rows: current } = await client.query<{ on_date: string }>(
+      `select (scheduled_for at time zone $2)::date::text as on_date
+         from visits where id = $1`,
+      [visits[0].id, TIMEZONE],
+    );
+    if (current[0]?.on_date === target) continue;
 
     await client.query(
       `update visits
@@ -133,20 +158,18 @@ export async function rescheduleVisit(
         subscription_id: string | null;
         period_start: string | null;
         period_end: string | null;
-        slot: string;
+        slot: number | null;
+        period_id: string | null;
         from_date: string;
         assigned_cleaner_id: string | null;
       }>(
-        `select v.id, v.subscription_id,
+        // The slot is read, not counted. Deriving it from date order meant
+        // that moving the second cleaning earlier turned it into the first,
+        // so the next move wrote to the wrong remembered weekday.
+        `select v.id, v.subscription_id, v.slot, v.period_id,
                 (v.scheduled_for at time zone $3)::date::text as from_date,
                 v.assigned_cleaner_id,
-                sp.period_start::text, sp.period_end::text,
-                (
-                  select count(*) from visits other
-                   where other.period_id = v.period_id
-                     and other.status <> 'canceled'
-                     and other.scheduled_for < v.scheduled_for
-                )::text as slot
+                sp.period_start::text, sp.period_end::text
            from visits v
            left join subscription_periods sp on sp.id = v.period_id
           where v.id = $1
@@ -159,6 +182,28 @@ export async function rescheduleVisit(
       const visit = rows[0];
       if (!visit) {
         return { ok: false as const, message: "That cleaning cannot be moved." };
+      }
+
+      // Two cleanings on one morning is not a schedule, it is the whole
+      // month's service used up in a day with two crews sent to one door.
+      // Nothing stopped it, because moving a visit bypasses the generator
+      // that normally spaces them.
+      if (visit.period_id) {
+        const { rows: clash } = await client.query<{ id: string }>(
+          `select id from visits
+            where period_id = $1
+              and id <> $2
+              and status <> 'canceled'
+              and (scheduled_for at time zone $4)::date = $3::date
+            limit 1`,
+          [visit.period_id, visit.id, date.data, TIMEZONE],
+        );
+        if (clash.length > 0) {
+          return {
+            ok: false as const,
+            message: `Your other cleaning is already on ${formatLong(date.data)}. Pick a different day so they are not both on the same morning.`,
+          };
+        }
       }
 
       // Membership visits belong to a period and must stay in it.
@@ -187,8 +232,8 @@ export async function rescheduleVisit(
       // months already on the calendar sitting on the old day, so a member who
       // moved to Tuesday would still see Thursdays listed and reasonably think
       // it had not worked.
-      if (visit.subscription_id) {
-        const slot = Number(visit.slot);
+      if (visit.subscription_id && visit.slot !== null) {
+        const slot = visit.slot;
         const column = slot === 0 ? "preferred_weekday" : "preferred_weekday_second";
 
         const { rows: subRows } = await client.query<{
