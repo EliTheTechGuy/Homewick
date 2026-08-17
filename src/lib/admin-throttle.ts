@@ -2,17 +2,15 @@ import { query } from "./db";
 import { alertOwner } from "./alert";
 
 /**
- * Slow down guessing at the admin password.
+ * Slow down somebody working through addresses at the admin sign-in.
  *
- * There is one shared password and it unlocks every customer's entry codes.
- * Nothing counted failures, nothing delayed them, and nothing recorded them,
- * so an attacker could work through a list at full speed and leave no trace.
+ * There is no password to guess any more, so this no longer defends a
+ * credential. What it defends is the address list: without it, the sign-in
+ * form answers instantly for every address, and somebody could work out which
+ * ones can reach admin by trying a lot of them.
  *
- * This does not try to be a lockout. A lockout on a single shared credential
- * is a way for a stranger to lock the owner out of their own business on a
- * working morning. It makes guessing slow and noisy instead, which is what
- * actually defeats an online attack, and it tells the owner when somebody is
- * clearly trying.
+ * Still not a lockout. Locking on a request nobody has to authenticate for is
+ * a way for a stranger to stop the owner signing in on a working morning.
  *
  * Counted per address in the database rather than in memory, because the site
  * runs as many short-lived instances and a counter inside one of them counts
@@ -58,11 +56,13 @@ export async function throttleFailure(ip: string): Promise<void> {
   if (failures + 1 === ALERT_AT) {
     await alertOwner(
       "Somebody is guessing the admin password",
-      `${failures + 1} failed admin sign-ins from ${ip} in the last ${WINDOW_MINUTES} minutes.\n\n` +
-        `Admin unlocks every customer's entry codes, so this is worth taking ` +
-        `seriously. Changing ADMIN_PASSWORD in Vercel and redeploying ends it ` +
-        `immediately.\n\n` +
-        `If this was you locked out, ignore it.`,
+      `${failures + 1} failed admin sign-in attempts from ${ip} in the last ` +
+        `${WINDOW_MINUTES} minutes.\n\n` +
+        `These are requests for a sign-in link using an address that cannot ` +
+        `sign in, which is what working through a list of addresses looks ` +
+        `like. Nobody can get in without receiving an email, so this is worth ` +
+        `knowing about rather than acting on.\n\n` +
+        `If it continues, tell me and I will block the address.`,
     );
   }
 

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { query } from "@/lib/db";
-import { requireAdmin, isAdminConfigured } from "@/lib/admin-auth";
+import { guardAdminPage } from "@/lib/admin-page";
 import { isDatabaseConfigured } from "@/lib/db";
 import { CleanerRoster } from "@/components/admin/CleanerRoster";
 import { AdminNav } from "@/components/admin/AdminNav";
@@ -25,10 +25,8 @@ export type CleanerRow = {
 };
 
 export default async function CleanersPage() {
-  if (!isAdminConfigured()) return <Notice>This view is not available right now.</Notice>;
-  const admin = await requireAdmin();
-  if (!admin) return <Notice>This view is protected.</Notice>;
-  if (!isDatabaseConfigured()) return <Notice>This view is not available right now.</Notice>;
+  const guard = await guardAdminPage();
+  if (!guard.ok) return guard.node;
 
   // Counts come back with the roster so the page can say who is actually
   // carrying work, rather than just who exists.

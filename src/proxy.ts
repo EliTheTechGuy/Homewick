@@ -1,101 +1,66 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { throttleFailure, clearFailures } from "@/lib/admin-throttle";
+import { ADMIN_COOKIE } from "@/lib/admin-auth";
 
 /**
- * Make the browser ask for the admin password.
+ * Where admin lives, and who gets in.
  *
- * The admin pages already check HTTP Basic credentials, but nothing ever sent
- * back the challenge that makes a browser show its password box. Without it
- * the only way to supply credentials is to put them in the URL, and both
- * mobile Safari and Chrome strip that. So the one screen you need while
- * standing at a customer's door, the one holding the entry codes, could not be
- * opened on the device you would be holding.
+ * Two separate jobs, both settled before a page renders.
  *
- * This runs before the page, so an unauthenticated request never reaches the
- * database. The check inside the page stays as it is: middleware is easy to
- * misconfigure with a matcher typo, and a door code is not something to
- * protect with exactly one gate.
+ * Admin belongs on its own hostname. That is not a security measure by itself:
+ * a secret URL stops nobody who has seen a link, a browser history, or a
+ * referrer header. What it buys is separation. The admin session cookie is
+ * scoped to that host, so a bug on the public site cannot reach it, and the
+ * public site never serves an admin route at all.
+ *
+ * The gate is now a signed-in session rather than one shared password. That
+ * password could not be revoked for a single person, recorded nobody's
+ * identity, and left the entry-code audit log holding whatever name the
+ * browser chose to send.
+ *
+ * Only the presence of a session cookie is checked here. Whether it is valid
+ * is settled by the page, which can reach the database; this runs on every
+ * matching request and should not. A forged cookie therefore gets past this
+ * point and is turned away a few milliseconds later, having learned nothing.
  */
 
-const REALM = 'Basic realm="Homewick admin", charset="UTF-8"';
-
-function challenge(): NextResponse {
-  return new NextResponse("Authentication required.", {
-    status: 401,
-    headers: {
-      "WWW-Authenticate": REALM,
-      // A 401 body is attacker-visible, so it says nothing about why.
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-store",
-    },
-  });
+/** Admin answers here. Anything else serving /admin is a mistake. */
+function isAdminHost(host: string | null): boolean {
+  if (!host) return false;
+  const name = host.split(":")[0].toLowerCase();
+  return (
+    name.startsWith("admin.") ||
+    // Development has no subdomains, so admin shares the origin there.
+    name === "localhost" ||
+    name === "127.0.0.1"
+  );
 }
 
-/**
- * Compare by digest rather than byte by byte.
- *
- * Hashing first means the comparison runs over two fixed-length values, so
- * neither the length of the real password nor the position of the first wrong
- * character can be inferred from how long the answer takes.
- */
-async function matches(candidate: string, expected: string): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const [a, b] = await Promise.all([
-    crypto.subtle.digest("SHA-256", encoder.encode(candidate)),
-    crypto.subtle.digest("SHA-256", encoder.encode(expected)),
-  ]);
-  const x = new Uint8Array(a);
-  const y = new Uint8Array(b);
-  let mismatch = 0;
-  for (let i = 0; i < x.length; i++) mismatch |= x[i] ^ y[i];
-  return mismatch === 0;
+/** Reachable while signed out, or nobody could ever sign in. */
+function isPublicAdminPath(pathname: string): boolean {
+  return pathname === "/admin/sign-in" || pathname === "/admin/verify";
 }
 
 export default async function proxy(request: NextRequest) {
-  const expected = process.env.ADMIN_PASSWORD;
+  const { pathname } = request.nextUrl;
 
-  // No password configured means the gate cannot be enforced, so refuse
-  // rather than challenge. Challenging would invite guessing at a lock that
-  // is not attached to anything.
-  if (!expected) {
-    console.error("[admin] ADMIN_PASSWORD is not set; refusing all admin requests.");
-    return new NextResponse("Unavailable.", {
-      status: 503,
-      headers: { "Cache-Control": "no-store" },
+  // On the public site, admin does not exist. Deliberately a 404 rather than a
+  // redirect, because a redirect would confirm there is something to find.
+  if (!isAdminHost(request.headers.get("host"))) {
+    return new NextResponse("Not found", {
+      status: 404,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
     });
   }
 
-  const header = request.headers.get("authorization");
-  if (!header?.startsWith("Basic ")) return challenge();
+  if (isPublicAdminPath(pathname)) return NextResponse.next();
 
-  let decoded: string;
-  try {
-    decoded = atob(header.slice(6));
-  } catch {
-    return challenge();
+  if (!request.cookies.get(ADMIN_COOKIE)?.value) {
+    return NextResponse.redirect(new URL("/admin/sign-in", request.url));
   }
 
-  const separator = decoded.indexOf(":");
-  if (separator === -1) return challenge();
-
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    "unknown";
-
-  if (!(await matches(decoded.slice(separator + 1), expected))) {
-    // Recorded and slowed, not merely logged. One shared password that opens
-    // every customer's door codes, with nothing counting the misses, could be
-    // guessed at full speed indefinitely and leave no trace of having been
-    // tried. Deliberately not a lockout: that would let a stranger shut the
-    // owner out of their own business on a working morning.
-    await throttleFailure(ip);
-    return challenge();
-  }
-
-  // A correct password clears the slate, so one bad morning does not leave
-  // somebody throttled for the rest of the window.
-  await clearFailures(ip);
   return NextResponse.next();
 }
 

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { queryOne } from "@/lib/db";
+import { currentAdmin } from "@/lib/admin-auth";
+import { AdminSignOut } from "./AdminSignOut";
 
 /**
  * Admin was one page, so there was nowhere to navigate to and no nav.
@@ -27,8 +29,10 @@ export async function AdminNav({ current }: { current: (typeof TABS)[number]["ke
       where recovery_status in ('needed', 'in_progress')`,
   ).catch(() => null);
   const waiting = pending?.n ?? 0;
+  const admin = await currentAdmin();
 
   return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
     <nav aria-label="Admin sections" className="flex flex-wrap gap-1">
       {TABS.map((tab) => {
         const active = tab.key === current;
@@ -62,5 +66,13 @@ export async function AdminNav({ current }: { current: (typeof TABS)[number]["ke
         );
       })}
     </nav>
+
+      {admin && (
+        <div className="flex items-center gap-3 text-sm text-muted">
+          <span>{admin.name}</span>
+          <AdminSignOut />
+        </div>
+      )}
+    </div>
   );
 }

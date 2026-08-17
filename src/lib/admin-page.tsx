@@ -1,4 +1,5 @@
-import { requireAdmin, isAdminConfigured } from "./admin-auth";
+import { redirect } from "next/navigation";
+import { requireAdmin } from "./admin-auth";
 import { isDatabaseConfigured } from "./db";
 
 /**
@@ -13,15 +14,11 @@ import { isDatabaseConfigured } from "./db";
  * that it is unavailable.
  */
 export async function guardAdminPage(): Promise<{ ok: true } | { ok: false; node: React.ReactNode }> {
-  if (!isAdminConfigured()) {
-    console.error("[admin] ADMIN_PASSWORD is not set.");
-    return { ok: false, node: <Notice>This view is not available right now.</Notice> };
-  }
-
+  // The proxy has already turned away anyone without a session cookie. This
+  // is what checks the cookie is real, and stays because a matcher typo is an
+  // easy mistake and these pages reach door codes and revenue.
   const admin = await requireAdmin();
-  if (!admin) {
-    return { ok: false, node: <Notice>This view is protected.</Notice> };
-  }
+  if (!admin) redirect("/admin/sign-in");
 
   if (!isDatabaseConfigured()) {
     console.error("[admin] DATABASE_URL is not set.");

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { query, isDatabaseConfigured } from "@/lib/db";
-import { requireAdmin, isAdminConfigured } from "@/lib/admin-auth";
+import { guardAdminPage } from "@/lib/admin-page";
 import { TIMEZONE, formatLong, today } from "@/lib/dates";
 import { formatCents } from "@/lib/money";
 import { unitSizeLabel, type UnitSize } from "@/lib/pricing";
@@ -47,26 +47,8 @@ export default async function AdminTodayPage({
 }: {
   searchParams: Promise<{ date?: string }>;
 }) {
-  // Anyone can reach this URL, so the pre-auth states say nothing about how
-  // the deployment is configured. The specifics go to the server log.
-  if (!isAdminConfigured()) {
-    console.error("Admin view unavailable: ADMIN_PASSWORD is not set.");
-    return <Notice title="Unavailable">This view is not available right now.</Notice>;
-  }
-
-  const admin = await requireAdmin();
-  if (!admin) {
-    return (
-      <Notice title="Sign in required">
-        This view is protected. Reload with your credentials.
-      </Notice>
-    );
-  }
-
-  if (!isDatabaseConfigured()) {
-    console.error("Admin view unavailable: DATABASE_URL is not set.");
-    return <Notice title="Unavailable">This view is not available right now.</Notice>;
-  }
+  const guard = await guardAdminPage();
+  if (!guard.ok) return guard.node;
 
   const { date } = await searchParams;
   // A hand-edited or stale date must not reach Postgres as a cast, which would

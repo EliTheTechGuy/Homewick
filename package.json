@@ -12,7 +12,10 @@
     "db:migrate": "node scripts/migrate.mjs",
     "member:link": "node scripts/member-login-link.mjs",
     "email:test": "tsx scripts/send-test-email.mts",
-    "typecheck": "next typegen && tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit",
+    "admin:add": "node --env-file=.env.local scripts/admin-user.mjs add",
+    "admin:link": "node --env-file=.env.local scripts/admin-user.mjs link",
+    "admin:list": "node --env-file=.env.local scripts/admin-user.mjs list"
   },
   "dependencies": {
     "next": "16.3.0",
