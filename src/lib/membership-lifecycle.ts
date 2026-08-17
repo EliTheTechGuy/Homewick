@@ -227,18 +227,31 @@ export async function generateForSubscription(
   for (const period of periodsToGenerate(sub, from)) {
     const amountCents = rateForPeriod(sub, period);
 
-    const inserted = await client.query<{ id: string }>(
+    // A period that has not been invoiced yet must carry the rate that will
+    // actually be charged. Written once and left alone, a period created
+    // before a size change kept the old figure for ever, so the ledger and
+    // Stripe quietly disagreed by the difference between two plans.
+    //
+    // An invoiced period is never touched: that money has already moved, and
+    // rewriting the record of it would be worse than the disagreement.
+    //
+    // xmax distinguishes an insert from an update, so a corrected rate is not
+    // counted as a period that was created.
+    const inserted = await client.query<{ id: string; created: boolean }>(
       `insert into subscription_periods
          (subscription_id, period_start, period_end, visits_allotted, amount_cents)
        values ($1, $2, $3, $4, $5)
-       on conflict (subscription_id, period_start) do nothing
-       returning id`,
+       on conflict (subscription_id, period_start) do update
+         set amount_cents = excluded.amount_cents
+         where subscription_periods.stripe_invoice_id is null
+           and subscription_periods.amount_cents <> excluded.amount_cents
+       returning id, (xmax = 0) as created`,
       [sub.id, period.start, period.end, sub.visits_per_period, amountCents],
     );
 
     let periodId = inserted.rows[0]?.id;
     if (periodId) {
-      periodsCreated++;
+      if (inserted.rows[0].created) periodsCreated++;
     } else {
       const existing = await client.query<{ id: string }>(
         `select id from subscription_periods
@@ -334,6 +347,28 @@ export async function generateUpcomingVisits(
   from: ISODate = today(),
 ): Promise<{ subscriptions: number; periodsCreated: number; visitsCreated: number }> {
   return transaction(async (client) => {
+    // Settle any rate change whose date has arrived, before anything reads a
+    // rate. Nothing did this before, so pending_amount_cents sat there for
+    // ever and monthly_amount_cents kept the signup price. A member who
+    // changed size twice then had the second change fall back to what they
+    // paid on day one, because rateForPeriod only trusts pending when the
+    // period starts on or after its effective date, and by then the first
+    // change was in the past.
+    //
+    // Collapsing it here means every reader sees one number that is simply
+    // true, rather than each having to reimplement the same precedence.
+    await client.query(
+      `update subscriptions
+          set monthly_amount_cents = pending_amount_cents,
+              pending_amount_cents = null,
+              pending_amount_effective_on = null,
+              updated_at = now()
+        where pending_amount_cents is not null
+          and pending_amount_effective_on is not null
+          and pending_amount_effective_on <= $1::date`,
+      [from],
+    );
+
     const { rows: subs } = await client.query<SubscriptionRow>(
       `select id, customer_id, property_id, status, monthly_amount_cents,
               visits_per_period, pet_surcharge_cents, preferred_weekday,

@@ -519,3 +519,118 @@ test("paying promotes the membership and releases its visits", async () => {
   );
   assert.equal(after.rows[0].status, "canceled", "promotion must only move forward");
 });
+
+test("a rate change settles, so a second change cannot revert to the signup price", async () => {
+  // The bug: nothing ever promoted pending_amount_cents into
+  // monthly_amount_cents, so a member who changed size twice had the second
+  // change fall back to whatever they paid on day one.
+  const { customerId, propertyId } = await seedCustomer("rates@example.com");
+  const subscriptionId = await insertSubscription(customerId, propertyId, "2026-01-15", 15);
+
+  // Signed up at the studio rate, then upsized to 2 bed from 15 February.
+  await db.query(
+    `update subscriptions
+        set monthly_amount_cents = 18900,
+            pending_amount_cents = 26900,
+            pending_amount_effective_on = '2026-02-15'
+      where id = $1`,
+    [subscriptionId],
+  );
+
+  // What the daily job now does before reading any rate.
+  const settle = async (on: string) =>
+    db.query(
+      `update subscriptions
+          set monthly_amount_cents = pending_amount_cents,
+              pending_amount_cents = null,
+              pending_amount_effective_on = null
+        where pending_amount_cents is not null
+          and pending_amount_effective_on is not null
+          and pending_amount_effective_on <= $1::date`,
+      [on],
+    );
+
+  // Before the date arrives, nothing moves.
+  await settle("2026-02-01");
+  let row = await db.query<{ monthly: number; pending: number | null }>(
+    `select monthly_amount_cents as monthly, pending_amount_cents as pending
+       from subscriptions where id = $1`,
+    [subscriptionId],
+  );
+  assert.equal(row.rows[0].monthly, 18900, "the change must not land early");
+  assert.equal(row.rows[0].pending, 26900);
+
+  // On the date, it settles.
+  await settle("2026-02-15");
+  row = await db.query(
+    `select monthly_amount_cents as monthly, pending_amount_cents as pending
+       from subscriptions where id = $1`,
+    [subscriptionId],
+  );
+  assert.equal(row.rows[0].monthly, 26900, "the new rate must become the real one");
+  assert.equal(row.rows[0].pending, null, "and stop being pending");
+
+  // Now a second change. Before the fix, this is where it reverted: the
+  // fallback still read 18900, the price they left two months earlier.
+  await db.query(
+    `update subscriptions
+        set pending_amount_cents = 36900, pending_amount_effective_on = '2026-03-15'
+      where id = $1`,
+    [subscriptionId],
+  );
+  row = await db.query(
+    `select monthly_amount_cents as monthly, pending_amount_cents as pending
+       from subscriptions where id = $1`,
+    [subscriptionId],
+  );
+  assert.equal(
+    row.rows[0].monthly,
+    26900,
+    "the rate in force must be the one they are actually paying, not the signup price",
+  );
+});
+
+test("an uninvoiced period takes the new rate; an invoiced one never does", async () => {
+  // Periods are created up to ~2.5 months ahead, so by the time somebody
+  // changes size the affected rows already exist. Written once and left
+  // alone, they kept the old figure and the ledger silently disagreed with
+  // Stripe by the difference between two plans.
+  const { customerId, propertyId } = await seedCustomer("periods@example.com");
+  const subscriptionId = await insertSubscription(customerId, propertyId, "2026-01-15", 15);
+
+  await db.query(
+    `insert into subscription_periods
+       (subscription_id, period_start, period_end, visits_allotted, amount_cents, stripe_invoice_id)
+     values ($1, '2026-02-15', '2026-03-15', 2, 26900, 'in_already_billed'),
+            ($1, '2026-03-15', '2026-04-15', 2, 26900, null)`,
+    [subscriptionId],
+  );
+
+  const upsert = async (start: string, end: string, cents: number) =>
+    db.query<{ id: string; created: boolean }>(
+      `insert into subscription_periods
+         (subscription_id, period_start, period_end, visits_allotted, amount_cents)
+       values ($1, $2, $3, 2, $4)
+       on conflict (subscription_id, period_start) do update
+         set amount_cents = excluded.amount_cents
+         where subscription_periods.stripe_invoice_id is null
+           and subscription_periods.amount_cents <> excluded.amount_cents
+       returning id, (xmax = 0) as created`,
+      [subscriptionId, start, end, cents],
+    );
+
+  const invoiced = await upsert("2026-02-15", "2026-03-15", 36900);
+  const open = await upsert("2026-03-15", "2026-04-15", 36900);
+
+  assert.equal(invoiced.rows.length, 0, "an invoiced period must not be repriced");
+  assert.equal(open.rows.length, 1, "an uninvoiced period must be corrected");
+  assert.equal(open.rows[0].created, false, "correcting one is not creating one");
+
+  const after = await db.query<{ period_start: string; amount_cents: number }>(
+    `select period_start::text, amount_cents from subscription_periods
+      where subscription_id = $1 order by period_start`,
+    [subscriptionId],
+  );
+  assert.equal(after.rows[0].amount_cents, 26900, "money already taken stays as recorded");
+  assert.equal(after.rows[1].amount_cents, 36900, "money not yet taken follows the new rate");
+});
