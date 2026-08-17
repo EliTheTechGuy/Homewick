@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 import { addDays, addMonths, daysBetween, firstWeekdayOnOrAfter, today } from "./dates";
 import { visitReminderEmail } from "./emails/templates";
+import { quoteFor } from "./booking-schema";
+import {
+  MEMBERSHIP_PRICES,
+  MEMBER_FIRST_MONTH_DISCOUNT,
+  PET_SURCHARGE_CENTS,
+} from "./pricing";
 import {
   cancellationEndDate,
   periodContaining,
@@ -450,4 +456,64 @@ test("the reminder says today when it goes out on the morning itself", () => {
     /tomorrow/,
     "a same-morning reminder must not tell somebody the wrong day",
   );
+});
+
+test("the welcome discount comes off the membership and nothing else", () => {
+  // The bug this guards: the coupon was applied to the whole Stripe session,
+  // and in subscription mode the pet surcharge and add-ons land on that same
+  // first invoice, so 15% came off those too. A 2 bed signup with pets and
+  // one add-on was quoted $275.15 and charged $268.17.
+  //
+  // Asserted as a property of the quote rather than by re-deriving it: only
+  // the membership line may differ from its undiscounted price.
+  const withExtras = quoteFor({
+    plan: "membership",
+    unitSize: "2br_2ba",
+    serviceType: undefined,
+    hasPets: true,
+    addOns: ["oven"],
+    freePerk: undefined,
+  } as never);
+
+  const membershipLine = withExtras.lines.find((l) => /Membership/.test(l.label));
+  assert.ok(membershipLine, "a membership booking must quote a membership line");
+  assert.equal(
+    membershipLine.amountCents,
+    Math.round(MEMBERSHIP_PRICES["2br_2ba"].monthlyCents * (1 - MEMBER_FIRST_MONTH_DISCOUNT)),
+    "the membership line carries the whole first-month discount",
+  );
+
+  const pets = withExtras.lines.find((l) => /Pet/.test(l.label));
+  assert.equal(
+    pets?.amountCents,
+    PET_SURCHARGE_CENTS,
+    "the pet surcharge is a flat charge and must not be discounted",
+  );
+
+  // The total is the sum of its lines, so nothing may be discounted twice by
+  // a coupon applied on top at the Stripe end.
+  const summed = withExtras.lines.reduce((n, l) => n + l.amountCents, 0);
+  assert.equal(summed, withExtras.totalCents, "the total must be exactly its lines");
+});
+
+test("every membership size quotes a first month of exactly 15 percent off", () => {
+  for (const size of ["studio_1br", "2br_2ba", "3br_2ba"] as const) {
+    const quote = quoteFor({
+      plan: "membership",
+      unitSize: size,
+      serviceType: undefined,
+      hasPets: false,
+      addOns: [],
+      freePerk: undefined,
+    } as never);
+
+    const monthly = MEMBERSHIP_PRICES[size].monthlyCents;
+    assert.equal(
+      quote.totalCents,
+      Math.round(monthly * (1 - MEMBER_FIRST_MONTH_DISCOUNT)),
+      `${size} first month must be 15% off ${monthly}`,
+    );
+    // Integer cents throughout; a fractional charge would be a rounding bug.
+    assert.equal(Math.round(quote.totalCents), quote.totalCents);
+  }
 });

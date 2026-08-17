@@ -754,3 +754,132 @@ test("realignment finds the right visit even when one is assigned", async () => 
     "and it can then be recognised as committed work and left alone",
   );
 });
+
+test("an email is claimed once, and a failed send releases the claim", async () => {
+  // sendOnce is the only thing stopping a Stripe webhook retry sending a
+  // second "welcome to your membership", which reads to a customer like a
+  // second charge. It had no test at all.
+  const { customerId } = await seedCustomer("once@example.com");
+  const key = "evt_test_welcome";
+
+  const claim = async () =>
+    db.query<{ id: string }>(
+      `insert into email_deliveries (event_key, kind, customer_id, recipient)
+       values ($1, 'membership_welcome', $2, 'once@example.com')
+       on conflict (event_key, kind) do nothing
+       returning id`,
+      [key, customerId],
+    );
+
+  const first = await claim();
+  assert.equal(first.rows.length, 1, "the first delivery of an event claims the send");
+
+  const second = await claim();
+  assert.equal(second.rows.length, 0, "a retry of the same event must not claim it again");
+
+  // A different kind for the same event is a different message and must be
+  // free to send: the owner alert rides on the same Stripe event as the
+  // customer's welcome.
+  const otherKind = await db.query<{ id: string }>(
+    `insert into email_deliveries (event_key, kind, customer_id, recipient)
+     values ($1, 'owner_booking_alert', $2, 'owner@example.com')
+     on conflict (event_key, kind) do nothing
+     returning id`,
+    [key, customerId],
+  );
+  assert.equal(otherKind.rows.length, 1, "a different message on the same event still sends");
+
+  // Releasing on a failed send is what stops one bad minute at the mail
+  // provider turning into a reminder that is never sent at all.
+  await db.query(`delete from email_deliveries where id = $1`, [first.rows[0].id]);
+  const afterRelease = await claim();
+  assert.equal(afterRelease.rows.length, 1, "a released claim can be retried");
+});
+
+test("an expired checkout voids the booking it was for", async () => {
+  // Stripe expires an abandoned session after 24 hours. Without handling it
+  // the unpaid row sits for ever, blocking that customer from booking again.
+  const { customerId, propertyId } = await seedCustomer("expired@example.com");
+  const subscriptionId = await insertSubscription(customerId, propertyId, "2026-01-15", 15);
+  await db.query(`update subscriptions set status = 'pending_payment' where id = $1`, [
+    subscriptionId,
+  ]);
+
+  const period = (
+    await db.query<{ id: string }>(
+      `insert into subscription_periods
+         (subscription_id, period_start, period_end, visits_allotted, amount_cents)
+       values ($1, '2026-01-15', '2026-02-15', 2, 26900) returning id`,
+      [subscriptionId],
+    )
+  ).rows[0].id;
+  await db.query(
+    `insert into visits
+       (customer_id, property_id, subscription_id, period_id, origin, service_type,
+        status, scheduled_for, slot)
+     values ($1, $2, $3, $4, 'membership', 'standard', 'pending_payment',
+             now() + interval '3 days', 0)`,
+    [customerId, propertyId, subscriptionId, period],
+  );
+
+  // Exactly what the webhook runs on checkout.session.expired.
+  await db.query(
+    `update visits set status = 'canceled'
+      where subscription_id = $1 and status = 'pending_payment'`,
+    [subscriptionId],
+  );
+  await db.query(
+    `update subscriptions
+        set status = 'canceled', ends_on = current_date
+      where id = $1 and status = 'pending_payment'`,
+    [subscriptionId],
+  );
+
+  const sub = await db.query<{ status: string }>(
+    `select status::text as status from subscriptions where id = $1`,
+    [subscriptionId],
+  );
+  assert.equal(sub.rows[0].status, "canceled", "an abandoned booking is voided");
+
+  const blocking = await db.query<{ n: number }>(
+    `select count(*)::int as n from subscriptions
+      where customer_id = $1 and status in ('active','paused','pending_cancellation')`,
+    [customerId],
+  );
+  assert.equal(blocking.rows[0].n, 0, "and stops blocking that customer from booking again");
+
+  const open = await db.query<{ n: number }>(
+    `select count(*)::int as n from visits
+      where subscription_id = $1 and status <> 'canceled'`,
+    [subscriptionId],
+  );
+  assert.equal(open.rows[0].n, 0, "its visits go with it");
+});
+
+test("a late webhook cannot resurrect a cancelled membership", async () => {
+  // Stripe retries, and a delayed checkout.session.completed arriving after
+  // somebody cancelled must not put them back on the books.
+  const { customerId, propertyId } = await seedCustomer("late@example.com");
+  const subscriptionId = await insertSubscription(customerId, propertyId, "2026-01-15", 15);
+
+  for (const state of ["canceled", "pending_cancellation"] as const) {
+    await db.query(`update subscriptions set status = $2::subscription_state where id = $1`, [
+      subscriptionId,
+      state,
+    ]);
+
+    // What the webhook runs: promote only from pending_payment.
+    await db.query(
+      `update subscriptions
+          set status = case when status = 'pending_payment' then 'active' else status end
+        where id = $1`,
+      [subscriptionId],
+    );
+
+    const after = await db.query<{ status: string }>(
+      `select status::text as status from subscriptions where id = $1`,
+      [subscriptionId],
+    );
+    assert.equal(after.rows[0].status, state, `${state} must survive a late webhook`);
+  }
+});
