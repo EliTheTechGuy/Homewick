@@ -6,34 +6,32 @@ import { z } from "zod";
 import {
   ADMIN_COOKIE,
   adminCookieOptions,
-  consumeAdminLoginToken,
-  createAdminLoginLink,
   endAdminSession,
+  signInWithPassword,
 } from "@/lib/admin-auth";
-import { sendEmail } from "@/lib/email";
-import { site } from "@/lib/site";
-import { throttleFailure } from "@/lib/admin-throttle";
+import { throttleFailure, clearFailures } from "@/lib/admin-throttle";
 
 /**
- * Ask for a sign-in link.
+ * Sign in with an email and password.
  *
- * The reply is identical whether the address exists or not. Admin is a much
- * smaller set than the member list, so confirming one is a stronger hint than
- * it would be there.
+ * One message for every kind of failure. Distinguishing "no such account" from
+ * "wrong password" would confirm which addresses reach admin, and that list is
+ * short enough to be worth guessing at.
+ *
+ * There is no reset by email on purpose. Adding one would mean whoever takes
+ * the mailbox takes admin, which is the thing choosing a password was meant to
+ * avoid. Recovery is `npm run admin:password`, run by somebody who already
+ * holds the database credentials.
  */
-export async function requestAdminLink(
+export async function signInAdmin(
   formData: FormData,
-): Promise<{ ok: boolean; message: string }> {
-  const generic =
-    "If that address can sign in, a link is on its way. It expires in 15 minutes.";
+): Promise<{ error: string } | never> {
+  const email = z.string().trim().max(200).safeParse(formData.get("email"));
+  const password = z.string().min(1).max(400).safeParse(formData.get("password"));
 
-  const parsed = z
-    .string()
-    .trim()
-    .max(200)
-    .pipe(z.email())
-    .safeParse(formData.get("email"));
-  if (!parsed.success) return { ok: false, message: "Enter a valid email address." };
+  if (!email.success || !password.success) {
+    return { error: "Enter your email and password." };
+  }
 
   const headerList = await headers();
   const ip =
@@ -41,45 +39,23 @@ export async function requestAdminLink(
     headerList.get("x-real-ip") ??
     "unknown";
 
+  let session: string | null = null;
   try {
-    const result = await createAdminLoginLink(parsed.data, adminBaseUrl(headerList), ip);
-
-    if (result.sent) {
-      // Not awaited, so a known address does not take measurably longer than
-      // an unknown one and give itself away by timing.
-      void sendEmail({
-        to: result.email,
-        subject: "Your Homewick admin sign-in link",
-        text:
-          `Hi ${result.name},\n\n` +
-          `Open this to sign in to Homewick admin. It expires in 15 minutes and ` +
-          `works once.\n\n${result.url}\n\n` +
-          `If you did not ask for this, somebody has your email address and ` +
-          `nothing more. The link alone does not let them in.\n`,
-      }).catch((err) => console.error("[admin] sign-in link not sent", err));
-    } else {
-      // A request for an address that cannot sign in is worth slowing, since
-      // it is what walking a list of addresses looks like.
-      await throttleFailure(ip);
-    }
-
-    return { ok: true, message: generic };
+    session = await signInWithPassword(email.data, password.data);
   } catch (err) {
-    console.error("[admin] sign-in link failed", err);
-    return { ok: false, message: "Sign-in is unavailable right now." };
+    console.error("[admin] sign-in failed", err);
+    return { error: "Sign-in is unavailable right now. Please try again shortly." };
   }
-}
 
-/** Spend the link. Called from a click, never from the page loading. */
-export async function completeAdminSignIn(token: unknown): Promise<{ error: string } | never> {
-  const parsed = z.string().min(10).max(200).safeParse(token);
-  if (!parsed.success) return { error: "That link is not valid." };
-
-  const session = await consumeAdminLoginToken(parsed.data);
   if (!session) {
-    return { error: "That link has expired or has already been used." };
+    // Recorded and slowed. With no second factor and no email recovery, a
+    // leaked or guessed password is the whole game, so making attempts cost
+    // time is the main thing standing in the way of working through a list.
+    await throttleFailure(ip);
+    return { error: "That email and password do not match." };
   }
 
+  await clearFailures(ip);
   (await cookies()).set(ADMIN_COOKIE, session, adminCookieOptions());
   redirect("/admin");
 }
@@ -87,17 +63,4 @@ export async function completeAdminSignIn(token: unknown): Promise<{ error: stri
 export async function signOutAdmin(): Promise<never> {
   await endAdminSession();
   redirect("/admin/sign-in");
-}
-
-/**
- * The host the link should point at.
- *
- * Taken from the request rather than from site.url, because admin lives on its
- * own hostname and a link back to the public site would land on a 404.
- */
-function adminBaseUrl(headerList: Headers): string {
-  const host = headerList.get("host");
-  if (!host) return site.url;
-  const protocol = host.startsWith("localhost") ? "http" : "https";
-  return `${protocol}://${host}`;
 }

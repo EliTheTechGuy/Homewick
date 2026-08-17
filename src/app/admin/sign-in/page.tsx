@@ -12,7 +12,7 @@ export default function AdminSignInPage() {
     <div className="mx-auto max-w-md px-5 py-24">
       <h1 className="text-3xl font-semibold text-navy">Homewick admin</h1>
       <p className="mt-3 leading-relaxed text-muted">
-        Enter your address and we will email you a link. There is no password.
+        Signed-in sessions last 30 days from last use, so this should be rare.
       </p>
       <AdminSignInForm />
     </div>
