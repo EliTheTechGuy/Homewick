@@ -1,5 +1,6 @@
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { StructuredData } from "@/components/StructuredData";
 
 /** The public site. Admin deliberately sits outside this shell. */
 export default function SiteLayout({ children }: LayoutProps<"/">) {
@@ -14,6 +15,7 @@ export default function SiteLayout({ children }: LayoutProps<"/">) {
       >
         Skip to content
       </a>
+      <StructuredData />
       <Header />
       <main id="main" className="flex-1">
         {children}

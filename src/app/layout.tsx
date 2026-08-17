@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   },
   description:
     "Membership apartment cleaning in the Dallas-Fort Worth metroplex. Two cleanings a month, one flat charge, the same cleaner whenever scheduling allows.",
+  alternates: { canonical: "/" },
   openGraph: {
     title: "Homewick Cleaning",
     description:
@@ -18,6 +19,12 @@ export const metadata: Metadata = {
     siteName: site.name,
     locale: "en_US",
     type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Homewick Cleaning",
+    description:
+      "Membership apartment cleaning in the Dallas-Fort Worth metroplex. Two cleanings a month, one flat charge.",
   },
 };
 
