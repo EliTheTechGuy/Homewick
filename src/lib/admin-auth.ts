@@ -1,19 +1,21 @@
 import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
-import { query, queryOne, transaction } from "./db";
+import { query, queryOne } from "./db";
+import { verifyPassword } from "./passwords";
 
 /**
  * Who is signed in to admin.
  *
- * Passwordless, the same shape as the member side. There is no password
- * anywhere in this product: nothing to leak, no reset flow, and no credential
- * living in the same database as the entry codes. Proving control of the
- * mailbox is the same proof a password reset would give, without the store.
+ * An account per person, with a password. This replaces one shared password
+ * that could not be revoked for a single person, recorded nobody's identity,
+ * and left access_reveals holding whatever name the browser happened to send,
+ * which made the audit log worthless as evidence of who opened a customer's
+ * door code.
  *
- * This replaces one shared password. That could not be revoked for one person,
- * recorded nobody's identity, and left access_reveals holding whatever name
- * the browser happened to send, which made the audit log worthless as evidence
- * of who opened a customer's door code.
+ * There is deliberately no reset-by-email. It would mean anybody who took the
+ * mailbox could take admin, which is the thing choosing a password was meant
+ * to avoid. Recovery is a command run by somebody who already holds the
+ * database credentials, which is the same level of trust as the data itself.
  */
 
 export const ADMIN_COOKIE = "hw_admin";
@@ -21,8 +23,12 @@ export const ADMIN_COOKIE = "hw_admin";
 /** Sessions run from last use, so somebody working weekly never signs in twice. */
 const SESSION_DAYS = 30;
 const COOKIE_DAYS = 400;
-const LINK_MINUTES = 15;
-const MAX_LINKS_PER_HOUR = 5;
+/**
+ * Verified against when no account matches, so a wrong address costs the same
+ * as a wrong password. The value never matches anything.
+ */
+const DUMMY_HASH =
+  "scrypt$32768$8$1$00000000000000000000000000000000$" + "0".repeat(128);
 
 export type Admin = {
   id: string;
@@ -44,85 +50,42 @@ function newToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
-export type AdminLinkRequest =
-  | { sent: true; url: string; email: string; name: string }
-  | { sent: false; reason: "unknown_email" | "rate_limited" };
-
 /**
- * Mint a sign-in link.
+ * Check an email and password, and open a session if they match.
  *
- * An unknown or deactivated address is reported to the caller, which
- * deliberately does not tell the visitor which. Admin is a smaller set than
- * the member list, so confirming an address exists is a stronger hint.
+ * One answer for every kind of failure: unknown address, wrong password,
+ * deactivated account. Telling them apart would confirm which addresses can
+ * reach admin, and that is a shorter list than the member one.
+ *
+ * The hash is verified even when no account was found, against a throwaway
+ * value. Otherwise an unknown address returns in a millisecond while a real
+ * one takes a tenth of a second, and the timing answers the question the
+ * message refuses to.
  */
-export async function createAdminLoginLink(
+export async function signInWithPassword(
   rawEmail: string,
-  baseUrl: string,
-  ip: string | null,
-): Promise<AdminLinkRequest> {
+  password: string,
+): Promise<string | null> {
   const email = rawEmail.trim().toLowerCase();
 
-  const user = await queryOne<{ id: string; name: string }>(
-    `select id, name from admin_users where email = $1 and is_active = true`,
+  const user = await queryOne<{ id: string; password_hash: string | null }>(
+    `select id, password_hash from admin_users
+      where email = $1 and is_active = true`,
     [email],
   );
-  if (!user) return { sent: false, reason: "unknown_email" };
 
-  const recent = await queryOne<{ count: string }>(
-    `select count(*) as count from admin_login_tokens
-      where admin_user_id = $1 and created_at > now() - interval '1 hour'`,
-    [user.id],
-  );
-  if (Number(recent?.count ?? 0) >= MAX_LINKS_PER_HOUR) {
-    return { sent: false, reason: "rate_limited" };
-  }
+  const ok = await verifyPassword(password, user?.password_hash ?? DUMMY_HASH);
+  if (!user || !ok) return null;
 
-  const token = newToken();
+  const sessionToken = newToken();
   await query(
-    `insert into admin_login_tokens (admin_user_id, token_hash, expires_at, requested_ip)
-     values ($1, $2, now() + ($3 || ' minutes')::interval, $4)`,
-    [user.id, hash(token), String(LINK_MINUTES), ip],
+    `insert into admin_sessions (admin_user_id, token_hash, expires_at)
+     values ($1, $2, now() + ($3 || \' days\')::interval)`,
+    [user.id, hash(sessionToken), String(SESSION_DAYS)],
   );
+  await query(`update admin_users set last_seen_at = now() where id = $1`, [user.id]);
 
-  return {
-    sent: true,
-    email,
-    name: user.name,
-    url: `${baseUrl}/admin/verify?token=${encodeURIComponent(token)}`,
-  };
-}
-
-/**
- * Spend a link and open a session.
- *
- * Single use, enforced under a row lock inside the same transaction that
- * creates the session, so a mail scanner and a person racing the same link
- * cannot both end up signed in.
- */
-export async function consumeAdminLoginToken(token: string): Promise<string | null> {
-  return transaction(async (client) => {
-    const { rows } = await client.query<{ id: string; admin_user_id: string }>(
-      `select id, admin_user_id from admin_login_tokens
-        where token_hash = $1 and used_at is null and expires_at > now()
-        for update`,
-      [hash(token)],
-    );
-    const found = rows[0];
-    if (!found) return null;
-
-    await client.query(`update admin_login_tokens set used_at = now() where id = $1`, [
-      found.id,
-    ]);
-
-    const sessionToken = newToken();
-    await client.query(
-      `insert into admin_sessions (admin_user_id, token_hash, expires_at)
-       values ($1, $2, now() + ($3 || ' days')::interval)`,
-      [found.admin_user_id, hash(sessionToken), String(SESSION_DAYS)],
-    );
-
-    return sessionToken;
-  });
+  return sessionToken;
 }
 
 /** The signed-in admin, or null. */
