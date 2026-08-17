@@ -478,7 +478,12 @@ export function BookingForm({
               <Link href="/terms" target="_blank" className="font-medium text-accent underline">
                 service agreement
               </Link>
-              , including the membership, cancellation, and laundry terms.
+              , including the membership, cancellation, and laundry terms, and I have
+              read the{" "}
+              <Link href="/privacy" target="_blank" className="font-medium text-accent underline">
+                privacy policy
+              </Link>
+              .
             </span>
           </label>
         </Fieldset>
