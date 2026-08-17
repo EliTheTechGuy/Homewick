@@ -51,12 +51,20 @@ function isPublicAdminPath(pathname: string): boolean {
 
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const onAdminHost = isAdminHost(request.headers.get("host"));
+  const host = request.headers.get("host");
+  const onAdminHost = isAdminHost(host);
   const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
+
+  // Development has no subdomains, so localhost has to serve both sites at
+  // once. Only admin paths are gated there. Without this the public site is
+  // unreachable locally without an admin cookie, which is how it shipped: the
+  // rules below all key off "is this the admin host", and locally that is
+  // true for every request, including /pricing.
+  if (isLocal(host) && !isAdminPath) return NextResponse.next();
 
   // Typing the admin address should land in admin. Anything else is a small
   // daily annoyance: nobody visits this hostname to read about pricing.
-  if (onAdminHost && pathname === "/" && !isLocal(request.headers.get("host"))) {
+  if (onAdminHost && pathname === "/") {
     return NextResponse.redirect(new URL("/admin", request.url));
   }
 
@@ -66,8 +74,8 @@ export default async function proxy(request: NextRequest) {
   // partway through, because the success and cancel URLs are built from the
   // configured site address rather than from whichever host somebody is on.
   //
-  // Localhost is exempt because development has no subdomains.
-  if (onAdminHost && !isAdminPath && !isLocal(request.headers.get("host"))) {
+  // Localhost has already returned above, so this only ever runs for real.
+  if (onAdminHost && !isAdminPath) {
     const target = new URL(pathname + request.nextUrl.search, PUBLIC_ORIGIN);
     return NextResponse.redirect(target, 308);
   }
