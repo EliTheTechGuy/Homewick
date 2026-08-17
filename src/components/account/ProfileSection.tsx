@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { changeMembershipSize, updateAddress } from "@/actions/profile";
 import { formatLong } from "@/lib/dates";
 import { formatCents } from "@/lib/money";
@@ -22,6 +22,17 @@ const inputClass =
 export function ProfileSection({ overview }: { overview: MemberOverview }) {
   const { property, subscription, pendingRate } = overview;
   const [editing, setEditing] = useState(false);
+  const movedRef = useRef<HTMLButtonElement>(null);
+  const opened = useRef(false);
+
+  // Closing the form returns focus to the trigger that opened it, which has
+  // just remounted. The form takes care of focusing itself on the way in.
+  // The flag stops this firing on first render, where nothing was opened and
+  // stealing focus would be its own bug.
+  useEffect(() => {
+    if (editing) opened.current = true;
+    else if (opened.current) movedRef.current?.focus();
+  }, [editing]);
 
   if (!property || !subscription) return null;
 
@@ -45,6 +56,7 @@ export function ProfileSection({ overview }: { overview: MemberOverview }) {
             {property.city}, {property.state} {property.postalCode}
           </p>
           <button
+            ref={movedRef}
             type="button"
             onClick={() => setEditing(true)}
             className="mt-2 text-sm font-medium text-accent hover:underline"
@@ -77,6 +89,13 @@ function AddressForm({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [entryMethod, setEntryMethod] = useState("lobby");
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // The trigger that opened this has unmounted, so without moving focus a
+  // keyboard user is left at the top of the page with no idea a form appeared.
+  useEffect(() => {
+    formRef.current?.focus();
+  }, []);
 
   function submit(form: FormData) {
     setError(null);
@@ -88,7 +107,13 @@ function AddressForm({
   }
 
   return (
-    <form action={submit} className="mt-4 space-y-4">
+    <form
+      ref={formRef}
+      action={submit}
+      tabIndex={-1}
+      aria-label="Change your address"
+      className="mt-4 space-y-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+    >
       <p className="text-sm leading-relaxed text-muted">
         Tell us the new place and we will move your upcoming cleanings across.
         Nothing about your membership changes.
@@ -153,7 +178,11 @@ function AddressForm({
         There are pets at this address
       </label>
 
-      {error && <p className="text-sm text-red-700">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-red-700">
+          {error}
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <button
@@ -242,7 +271,12 @@ function SizeChooser({
       </div>
 
       {message && (
-        <p className={`mt-3 text-sm ${failed ? "text-red-700" : "text-body"}`}>{message}</p>
+        <p
+          role={failed ? "alert" : "status"}
+          className={`mt-3 text-sm ${failed ? "text-red-700" : "text-body"}`}
+        >
+          {message}
+        </p>
       )}
 
       <button

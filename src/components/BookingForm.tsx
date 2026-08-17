@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { submitBooking } from "@/actions/booking";
@@ -64,6 +64,22 @@ export function BookingForm({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const errorRef = useRef<HTMLParagraphElement>(null);
+
+  /**
+   * Take the reader to the problem, not just the page.
+   *
+   * Scrolling moves the viewport but leaves the cursor where it was, so
+   * somebody using a screen reader or zoomed well in was told nothing and saw
+   * nothing change. Focus is deferred a tick because the banner does not
+   * exist until the state that renders it has committed.
+   */
+  function focusError() {
+    requestAnimationFrame(() => {
+      errorRef.current?.focus();
+      errorRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  }
 
   const [plan, setPlan] = useState<Plan>(initialPlan);
   const [unitSize, setUnitSize] = useState<UnitSize>(initialSize);
@@ -176,7 +192,7 @@ export function BookingForm({
                 : "Please check the highlighted fields and try again."
               : "That did not go through. Please check your details and try again."),
         );
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        focusError();
         return;
       }
 
@@ -184,7 +200,7 @@ export function BookingForm({
       const checkout = await createCheckoutSession(result.bookingRef, result.kind);
       if ("error" in checkout) {
         setFormError(checkout.error);
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        focusError();
         return;
       }
 
@@ -207,8 +223,18 @@ export function BookingForm({
       className="mt-12 grid gap-12 lg:grid-cols-[1fr_20rem]"
     >
       <div className="space-y-12">
+        {/* Announced when it appears, and focusable so the scroll that
+            follows a rejection actually takes the reader with it. Scrolling
+            alone moves the page but not the cursor, so somebody using a
+            screen reader was left where they were with no idea anything had
+            happened. */}
         {formError && (
-          <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <p
+            ref={errorRef}
+            role="alert"
+            tabIndex={-1}
+            className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+          >
             {formError}
           </p>
         )}
@@ -217,12 +243,16 @@ export function BookingForm({
         <Fieldset legend="How would you like to book?">
           <div className="grid gap-3 sm:grid-cols-2">
             <Choice
+              name="planChoice"
+              value="membership"
               selected={plan === "membership"}
               onSelect={() => setPlan("membership")}
               title="Membership"
               body="Two cleanings a month, 15% off every visit, one free add-on each month."
             />
             <Choice
+              name="planChoice"
+              value="one_time"
               selected={plan === "one_time"}
               onSelect={() => setPlan("one_time")}
               title="One-time clean"
@@ -237,6 +267,8 @@ export function BookingForm({
             {UNIT_SIZES.map((s) => (
               <Choice
                 key={s.id}
+                name="unitSizeChoice"
+                value={s.id}
                 selected={unitSize === s.id}
                 onSelect={() => setUnitSize(s.id)}
                 title={s.label}
@@ -256,6 +288,8 @@ export function BookingForm({
               {SERVICE_TYPES.map((s) => (
                 <Choice
                   key={s.id}
+                  name="serviceTypeChoice"
+                  value={s.id}
                   selected={serviceType === s.id}
                   onSelect={() => setServiceType(s.id)}
                   title={s.label}
@@ -312,7 +346,7 @@ export function BookingForm({
                       freePerk === a.code
                         ? "border-accent bg-accent/5"
                         : "border-hairline"
-                    } ${selectable ? "cursor-pointer" : "opacity-50"}`}
+                    } ${selectable ? "cursor-pointer" : "text-muted"}`}
                   >
                     <input
                       type="radio"
@@ -423,6 +457,8 @@ export function BookingForm({
             {ENTRY_METHODS.map((m) => (
               <Choice
                 key={m.id}
+                name="entryMethodChoice"
+                value={m.id}
                 selected={entryMethod === m.id}
                 onSelect={() => setEntryMethod(m.id)}
                 title={m.label}
@@ -455,7 +491,7 @@ export function BookingForm({
             name="instructions"
             rows={4}
             placeholder="Parking, a room to skip, where supplies live, anything specific."
-            className="w-full rounded-xl border border-hairline bg-white px-4 py-3 text-body placeholder:text-muted/70"
+            className="w-full rounded-xl border border-hairline bg-white px-4 py-3 text-body placeholder:text-muted"
           />
         </Fieldset>
 
@@ -565,36 +601,62 @@ function Fieldset({
       <legend className="text-xl font-semibold text-navy">{legend}</legend>
       {hint && <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">{hint}</p>}
       <div className="mt-5">{children}</div>
-      {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-red-700">
+          {error}
+        </p>
+      )}
     </fieldset>
   );
 }
 
+/**
+ * One option in a group of mutually exclusive ones.
+ *
+ * A real radio, visually hidden inside its label rather than replaced by a
+ * styled button. Buttons with aria-pressed announce as a row of independent
+ * toggles with no group and no "2 of 3", and they cannot be moved between
+ * with arrow keys, so a keyboard user has to tab through every option in
+ * every group. The native control gives all of that for free, and the
+ * surrounding fieldset and legend name the group.
+ *
+ * The value lives in React state, so `name` here is purely what makes the
+ * browser treat these as one group.
+ */
 function Choice({
+  name,
+  value,
   selected,
   onSelect,
   title,
   body,
 }: {
+  name: string;
+  value: string;
   selected: boolean;
   onSelect: () => void;
   title: string;
   body?: string;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      className={`rounded-xl border p-4 text-left transition-colors ${
+    <label
+      className={`block cursor-pointer rounded-xl border p-4 text-left transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent has-[:focus-visible]:ring-offset-2 ${
         selected
           ? "border-accent bg-accent/5 ring-1 ring-accent"
           : "border-hairline hover:border-accent/40"
       }`}
     >
+      <input
+        type="radio"
+        name={name}
+        value={value}
+        checked={selected}
+        onChange={onSelect}
+        className="sr-only"
+      />
       <span className="block font-medium text-navy">{title}</span>
       {body && <span className="mt-1 block text-sm leading-relaxed text-muted">{body}</span>}
-    </button>
+    </label>
   );
 }
 
@@ -613,6 +675,12 @@ function Field({
   required?: boolean;
   className?: string;
 }) {
+  // The error is tied to the input rather than merely sitting next to it, so
+  // somebody who cannot see the red text is still told what is wrong with the
+  // field they are on. Without this a screen reader user submits, hears
+  // nothing, and concludes the button is broken.
+  const errorId = `${name}-error`;
+
   return (
     <label className={`block ${className}`}>
       <span className="text-sm font-medium text-body">
@@ -623,9 +691,17 @@ function Field({
         name={name}
         type={type}
         required={required}
-        className="mt-2 w-full rounded-xl border border-hairline bg-white px-4 py-3 text-body"
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
+        className={`mt-2 w-full rounded-xl border bg-white px-4 py-3 text-body ${
+          error ? "border-red-600" : "border-hairline"
+        }`}
       />
-      {error && <span className="mt-1 block text-sm text-red-700">{error}</span>}
+      {error && (
+        <span id={errorId} className="mt-1 block text-sm text-red-700">
+          {error}
+        </span>
+      )}
     </label>
   );
 }
