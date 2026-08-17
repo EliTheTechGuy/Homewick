@@ -12,6 +12,18 @@ export function isEmailConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
 }
 
+/**
+ * Enough of an address to recognise, not enough to be a mailing list.
+ *
+ * Logs are read by more people than a customer list should be, and a leaked
+ * log of who uses a service that holds their home address is its own problem.
+ */
+function maskEmail(address: string): string {
+  const [name = "", domain = ""] = address.split("@");
+  const head = name.slice(0, 2);
+  return `${head}${"*".repeat(Math.max(0, name.length - 2))}@${domain}`;
+}
+
 export async function sendEmail(params: {
   to: string;
   subject: string;
@@ -20,9 +32,16 @@ export async function sendEmail(params: {
   html?: string;
 }): Promise<{ delivered: boolean }> {
   if (!isEmailConfigured()) {
+    // The subject and a masked recipient, never the body. A sign-in email's
+    // body contains a live token, and anyone who can read these logs could
+    // open it inside its fifteen minute window and be inside the account:
+    // home address, when the place is empty, and the door code.
+    //
+    // The old form printed the whole message, which turned a log reader into
+    // an authenticated member.
     console.warn(
-      `[email] RESEND_API_KEY/EMAIL_FROM not set, not sending.\n` +
-        `  to: ${params.to}\n  subject: ${params.subject}\n${params.text}`,
+      `[email] RESEND_API_KEY/EMAIL_FROM not set, not sending. ` +
+        `to=${maskEmail(params.to)} subject=${JSON.stringify(params.subject)}`,
     );
     return { delivered: false };
   }

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { throttleFailure, clearFailures } from "@/lib/admin-throttle";
 
 /**
  * Make the browser ask for the admin password.
@@ -77,13 +78,24 @@ export default async function proxy(request: NextRequest) {
   const separator = decoded.indexOf(":");
   if (separator === -1) return challenge();
 
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    request.headers.get("x-real-ip") ??
+    "unknown";
+
   if (!(await matches(decoded.slice(separator + 1), expected))) {
-    // Every failure is logged. A shared password with no lockout is worth
-    // being able to notice someone working through.
-    console.warn("[admin] failed sign-in attempt from", request.headers.get("x-forwarded-for") ?? "unknown");
+    // Recorded and slowed, not merely logged. One shared password that opens
+    // every customer's door codes, with nothing counting the misses, could be
+    // guessed at full speed indefinitely and leave no trace of having been
+    // tried. Deliberately not a lockout: that would let a stranger shut the
+    // owner out of their own business on a working morning.
+    await throttleFailure(ip);
     return challenge();
   }
 
+  // A correct password clears the slate, so one bad morning does not leave
+  // somebody throttled for the rest of the window.
+  await clearFailures(ip);
   return NextResponse.next();
 }
 

@@ -58,7 +58,16 @@ export async function requestLoginLink(
 
     if (result.sent) {
       const { subject, text } = signInEmail(result.url);
-      const { delivered } = await sendEmail({ to: result.email, subject, text });
+
+      // Not awaited. A known address used to wait on a full round trip to
+      // Resend while an unknown one returned after a single select, so timing
+      // the response told you whether somebody was a customer. The message is
+      // deliberately identical either way; this makes the delay identical too.
+      //
+      // Deliberately fire and forget rather than awaited-then-discarded: the
+      // point is that the caller does not wait.
+      void (async () => {
+        const { delivered } = await sendEmail({ to: result.email, subject, text });
 
       // Recorded like every other email, so "I never got my link" is a
       // question with an answer. Keyed on the token row rather than the
@@ -67,18 +76,20 @@ export async function requestLoginLink(
       //
       // Written after the attempt, not before, so the row carries whether it
       // actually went. A failure here must not swallow a link that was sent.
-      await query(
-        `insert into email_deliveries (event_key, kind, customer_id, recipient, delivered)
-         values ($1, 'member_sign_in', $2, $3, $4)
-         on conflict (event_key, kind) do nothing`,
-        [`login:${result.tokenId}`, result.customerId, result.email, delivered],
-      ).catch((err) => console.error("[account] could not record sign-in email", err));
+        await query(
+          `insert into email_deliveries (event_key, kind, customer_id, recipient, delivered)
+           values ($1, 'member_sign_in', $2, $3, $4)
+           on conflict (event_key, kind) do nothing`,
+          [`login:${result.tokenId}`, result.customerId, result.email, delivered],
+        ).catch((err) => console.error("[account] could not record sign-in email", err));
 
-      if (!delivered) {
-        // The link is valid regardless; it is in the server log for an
-        // operator to pass on. Do not surface that to the visitor.
-        console.warn(`[account] sign-in link for ${result.email} was not emailed.`);
-      }
+        if (!delivered) {
+          // The link is valid regardless. Which member it was for is in the
+          // delivery log rather than here, so the log does not become a list
+          // of who uses us.
+          console.warn("[account] a sign-in link was not emailed; see the delivery log.");
+        }
+      })().catch((err) => console.error("[account] sign-in email failed", err));
     } else if (result.reason === "rate_limited") {
       console.warn("[account] sign-in link rate limited");
     }

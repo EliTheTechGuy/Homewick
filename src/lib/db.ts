@@ -30,9 +30,26 @@ function createPool(): Pool {
  * certificate at all and refuses the handshake. Matching on the literal string
  * "localhost" is not enough, 127.0.0.1 and ::1 are just as local.
  */
+/**
+ * How to encrypt the connection, and whether to check who is on the other end.
+ *
+ * TLS without verification stops somebody passively reading the wire. It does
+ * not stop somebody who can answer in Postgres's place: they present any
+ * certificate, we accept it, and the very first thing we send is the database
+ * password in the connection handshake. After that they can read and rewrite
+ * every row, and the credentials keep working afterwards.
+ *
+ * Supabase signs with its own root rather than a public one, so the system
+ * trust store cannot verify it. The certificate therefore has to be supplied,
+ * and it lives in DATABASE_CA_CERT. Download it from the Supabase dashboard
+ * under Settings, Database, SSL configuration.
+ *
+ * Without it the old behaviour continues, because refusing to connect would
+ * take the whole site down over a warning. It says so loudly instead.
+ */
 export function sslFor(
   connectionString: string,
-): { rejectUnauthorized: boolean } | undefined {
+): { rejectUnauthorized: boolean; ca?: string } | undefined {
   let host = "";
   let sslmode: string | null = null;
   try {
@@ -45,7 +62,25 @@ export function sslFor(
 
   if (sslmode === "disable") return undefined;
   if (host === "localhost" || host === "127.0.0.1" || host === "::1") return undefined;
+
+  const ca = process.env.DATABASE_CA_CERT?.trim();
+  if (ca) return { rejectUnauthorized: true, ca };
+
+  warnOnceAboutUnverifiedTls();
   return { rejectUnauthorized: false };
+}
+
+// A serverless function is short lived, so this is per instance rather than
+// per process for its whole life. Still enough to stop it repeating on every
+// query while remaining visible in the logs.
+let warnedAboutTls = false;
+function warnOnceAboutUnverifiedTls(): void {
+  if (warnedAboutTls) return;
+  warnedAboutTls = true;
+  console.warn(
+    "[db] connecting without verifying the database certificate. " +
+      "Set DATABASE_CA_CERT to the Supabase CA to close this.",
+  );
 }
 
 /** Reused across hot reloads in dev so we don't leak connections. */
