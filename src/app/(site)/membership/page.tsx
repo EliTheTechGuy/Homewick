@@ -55,6 +55,7 @@ export default function MembershipPage() {
     <>
       <Section>
         <SectionHeading
+          as="h1"
           eyebrow="Membership"
           title="Two cleanings every month, one simple charge."
           lead="Membership is the cheapest way to use Homewick, and the reason the service stays consistent. The same apartment, the same standard, on a rhythm."

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { rescheduleVisit } from "@/actions/reschedule";
 import { addDays, formatLong, today } from "@/lib/dates";
 import type { UpcomingVisit } from "@/lib/member-account";
@@ -18,6 +18,16 @@ export function RescheduleVisit({ visit }: { visit: UpcomingVisit }) {
   const [date, setDate] = useState(visit.onDate);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // The trigger unmounts when the panel opens, so focus would otherwise fall
+  // to the body and a keyboard user would be left at the top of the page with
+  // no idea anything had opened. Closing puts them back where they were.
+  useEffect(() => {
+    if (open) panelRef.current?.focus();
+    else triggerRef.current?.focus();
+  }, [open]);
 
   const earliest = addDays(today(), 2);
   const latest = visit.periodEndsOn ? addDays(visit.periodEndsOn, -1) : undefined;
@@ -34,6 +44,7 @@ export function RescheduleVisit({ visit }: { visit: UpcomingVisit }) {
   if (!open) {
     return (
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
         className="text-sm font-medium text-accent hover:underline"
@@ -44,7 +55,13 @@ export function RescheduleVisit({ visit }: { visit: UpcomingVisit }) {
   }
 
   return (
-    <div className="mt-3 w-full rounded-xl border border-hairline bg-panel p-4">
+    <div
+      ref={panelRef}
+      tabIndex={-1}
+      role="group"
+      aria-label="Move this cleaning"
+      className="mt-3 w-full rounded-xl border border-hairline bg-panel p-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+    >
       <label className="block">
         <span className="text-sm font-medium text-body">Move this cleaning to</span>
         <input
@@ -65,7 +82,11 @@ export function RescheduleVisit({ visit }: { visit: UpcomingVisit }) {
         </p>
       )}
 
-      {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-red-700">
+          {error}
+        </p>
+      )}
 
       <div className="mt-3 flex flex-wrap gap-2">
         <button

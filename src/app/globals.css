@@ -13,8 +13,12 @@
     Arial, sans-serif;
 }
 
-html {
-  scroll-behavior: smooth;
+/* Smooth scrolling is pleasant and, for somebody who gets motion sick from
+   it, actively unpleasant. The OS already knows which they are. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 body {

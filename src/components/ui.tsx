@@ -22,11 +22,18 @@ export function SectionHeading({
   title,
   lead,
   centered = false,
+  as: Heading = "h2",
 }: {
   eyebrow?: string;
   title: string;
   lead?: string;
   centered?: boolean;
+  /**
+   * Every page needs exactly one h1, and three of ours opened at h2 because
+   * this always rendered one. A page whose headings start at level two reads
+   * to a screen reader as a fragment of something else.
+   */
+  as?: "h1" | "h2";
 }) {
   return (
     <div className={`${centered ? "mx-auto text-center" : ""} max-w-2xl`}>
@@ -35,9 +42,9 @@ export function SectionHeading({
           {eyebrow}
         </p>
       )}
-      <h2 className="mt-3 text-3xl font-semibold leading-tight text-navy md:text-4xl">
+      <Heading className="mt-3 text-3xl font-semibold leading-tight text-navy md:text-4xl">
         {title}
-      </h2>
+      </Heading>
       {lead && <p className="mt-4 text-lg leading-relaxed text-muted">{lead}</p>}
     </div>
   );

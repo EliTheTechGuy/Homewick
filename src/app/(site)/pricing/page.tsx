@@ -15,6 +15,7 @@ export default function PricingPage() {
     <>
       <Section>
         <SectionHeading
+          as="h1"
           eyebrow="Pricing"
           title="Everything published, nothing quoted at the door."
           lead="Rates are set by apartment size and service. What you see here is what you are charged."
