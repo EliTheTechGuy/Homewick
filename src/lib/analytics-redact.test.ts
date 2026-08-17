@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { redactAnalyticsUrl, SECRET_PATHS } from "./analytics-redact";
+import { redactAnalyticsUrl, KEPT_PARAMS, SECRET_PATHS } from "./analytics-redact";
 
 const SITE = "https://www.homewickcleaning.net";
 
@@ -8,12 +8,6 @@ describe("redactAnalyticsUrl", () => {
     for (const path of ["/", "/pricing", "/book", "/membership", "/privacy"]) {
       expect(redactAnalyticsUrl(`${SITE}${path}`)).toBe(`${SITE}${path}`);
     }
-  });
-
-  it("keeps the query string on ordinary pages, which is where campaign tags live", () => {
-    expect(redactAnalyticsUrl(`${SITE}/book?utm_source=google`)).toBe(
-      `${SITE}/book?utm_source=google`,
-    );
   });
 
   it("removes a feedback token", () => {
@@ -47,12 +41,70 @@ describe("redactAnalyticsUrl", () => {
     expect(redactAnalyticsUrl("")).toBeNull();
   });
 
+  describe("query parameters", () => {
+    it("keeps campaign tags, which is the whole point of measuring", () => {
+      const out = redactAnalyticsUrl(
+        `${SITE}/book?utm_source=google&utm_campaign=spring&gclid=abc123`,
+      );
+      expect(out).toContain("utm_source=google");
+      expect(out).toContain("utm_campaign=spring");
+      expect(out).toContain("gclid=abc123");
+    });
+
+    it("drops the booking id and stripe session from the paid confirmation", () => {
+      const out = redactAnalyticsUrl(
+        `${SITE}/book/confirmed/paid?ref=8f14e45f-ceea-467a-9575-4c4a1f2a1b33&session_id=cs_test_a1b2c3`,
+      );
+      expect(out).toBe(`${SITE}/book/confirmed/paid`);
+      expect(out).not.toContain("8f14e45f");
+      expect(out).not.toContain("cs_test");
+    });
+
+    it("still counts the paid confirmation as its own page, which is what ads match on", () => {
+      expect(
+        redactAnalyticsUrl(`${SITE}/book/confirmed/paid?ref=abc&session_id=cs_1`),
+      ).toContain("/book/confirmed/paid");
+    });
+
+    it("keeps a campaign tag while dropping an identifier in the same url", () => {
+      const out = redactAnalyticsUrl(
+        `${SITE}/book/confirmed?ref=8f14e45f&utm_source=google`,
+      );
+      expect(out).toContain("utm_source=google");
+      expect(out).not.toContain("8f14e45f");
+    });
+
+    it("drops anything it does not recognise, rather than passing it through", () => {
+      const out = redactAnalyticsUrl(`${SITE}/book?email=someone%40example.com&phone=5551234`);
+      expect(out).toBe(`${SITE}/book`);
+      expect(out).not.toContain("example.com");
+      expect(out).not.toContain("5551234");
+    });
+  });
+
   /**
-   * The list is the whole defence, so it is worth asserting rather than
+   * Both lists are the whole defence, so they are worth asserting rather than
    * trusting. A route added to the app without being added here would ship
-   * tokens silently.
+   * tokens silently, and a parameter added to the keep list is a decision that
+   * should be deliberate rather than incidental.
    */
   it("covers every route that carries a credential", () => {
     expect(SECRET_PATHS).toEqual(["/feedback/", "/unsubscribe/", "/account/verify"]);
+  });
+
+  it("keeps only campaign attribution parameters", () => {
+    expect(KEPT_PARAMS).toEqual([
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content",
+      "gclid",
+      "gbraid",
+      "wbraid",
+      "msclkid",
+      "fbclid",
+      "canceled",
+    ]);
   });
 });

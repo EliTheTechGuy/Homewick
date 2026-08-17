@@ -177,7 +177,7 @@ async function membershipSession(subscriptionId: string) {
     discounts: [{ coupon: await firstMonthCoupon([productId]) }],
     customer: row.stripe_customer_id ?? undefined,
     customer_email: row.stripe_customer_id ? undefined : row.email,
-    success_url: `${site.url}/book/confirmed?ref=${subscriptionId}&session_id={CHECKOUT_SESSION_ID}`,
+    success_url: `${site.url}/book/confirmed/paid?ref=${subscriptionId}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${site.url}/book?canceled=1`,
     metadata: { kind: "membership", subscription_id: subscriptionId },
     subscription_data: {
@@ -224,7 +224,7 @@ async function oneOffSession(visitId: string) {
     ],
     customer: row.stripe_customer_id ?? undefined,
     customer_email: row.stripe_customer_id ? undefined : row.email,
-    success_url: `${site.url}/book/confirmed?ref=${visitId}&session_id={CHECKOUT_SESSION_ID}`,
+    success_url: `${site.url}/book/confirmed/paid?ref=${visitId}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${site.url}/book?canceled=1`,
     metadata: { kind: "one_time", visit_id: visitId },
   });
