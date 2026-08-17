@@ -35,17 +35,40 @@ function isAdminHost(host: string | null): boolean {
   );
 }
 
+/** Where the public site lives, for sending stray requests back to it. */
+const PUBLIC_ORIGIN =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.homewickcleaning.net";
+
+function isLocal(host: string | null): boolean {
+  const name = host?.split(":")[0].toLowerCase();
+  return name === "localhost" || name === "127.0.0.1";
+}
+
 /** Reachable while signed out, or nobody could ever sign in. */
 function isPublicAdminPath(pathname: string): boolean {
-  return pathname === "/admin/sign-in" || pathname === "/admin/verify";
+  return pathname === "/admin/sign-in";
 }
 
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const onAdminHost = isAdminHost(request.headers.get("host"));
+  const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
+
+  // The admin host serves admin and nothing else. Without this the whole
+  // marketing site answered there too: a second copy of every page on a
+  // second hostname, and a booking begun on it would have been handed back
+  // to the public origin by Stripe halfway through.
+  //
+  // Localhost is exempt because development has no subdomains and both live
+  // on one origin there.
+  if (onAdminHost && !isAdminPath && !isLocal(request.headers.get("host"))) {
+    const target = new URL(pathname + request.nextUrl.search, PUBLIC_ORIGIN);
+    return NextResponse.redirect(target, 308);
+  }
 
   // On the public site, admin does not exist. Deliberately a 404 rather than a
   // redirect, because a redirect would confirm there is something to find.
-  if (!isAdminHost(request.headers.get("host"))) {
+  if (!onAdminHost && isAdminPath) {
     return new NextResponse("Not found", {
       status: 404,
       headers: {
@@ -54,6 +77,9 @@ export default async function proxy(request: NextRequest) {
       },
     });
   }
+
+  // Everything else on the public host is the public site, untouched.
+  if (!onAdminHost) return NextResponse.next();
 
   if (isPublicAdminPath(pathname)) return NextResponse.next();
 
@@ -65,5 +91,8 @@ export default async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin", "/admin/:path*"],
+  // Everything except Next's own assets, files with an extension, and the API.
+  // The API is excluded on purpose: Stripe posts to the public origin, and a
+  // redirect on a POST is a good way to lose a webhook body.
+  matcher: ["/((?!_next/|api/|.*\\.).*)"],
 };
