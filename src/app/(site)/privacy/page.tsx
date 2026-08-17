@@ -65,6 +65,13 @@ export default function PrivacyPage() {
                 A cookie that keeps you signed in to your account. It holds a random
                 value and nothing about you.
               </li>
+              <li>
+                Which pages were visited, which site you arrived from, roughly where in
+                the world the visit came from, and what kind of device and browser it
+                used. This is counted in totals to tell us whether the site is working
+                and how quickly it loads. It sets no cookie, it does not follow you to
+                other websites, and it is not tied to your account or to your booking.
+              </li>
             </ul>
             <p>
               We never see or store your card number. Card details are entered on
@@ -121,7 +128,10 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong>Vercel</strong> hosts the website and processes the requests your
-                browser makes to it.
+                browser makes to it. It also produces the visit and page-speed totals
+                described in section 1. Pages that are reached through a link we emailed
+                you have the unique part of that link removed before it is counted, so
+                the link cannot be reused by anybody looking at those totals.
               </li>
             </ul>
             <p>

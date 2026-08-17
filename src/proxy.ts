@@ -97,8 +97,11 @@ export default async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Everything except Next's own assets, files with an extension, and the API.
+  // Everything except Next's own assets, Vercel's own endpoints, files with an
+  // extension, and the API.
+  //
   // The API is excluded on purpose: Stripe posts to the public origin, and a
-  // redirect on a POST is a good way to lose a webhook body.
-  matcher: ["/((?!_next/|api/|.*\\.).*)"],
+  // redirect on a POST is a good way to lose a webhook body. /_vercel is
+  // excluded for the same reason, since analytics beacons are POSTs too.
+  matcher: ["/((?!_next/|_vercel/|api/|.*\\.).*)"],
 };

@@ -1,8 +1,14 @@
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { StructuredData } from "@/components/StructuredData";
+import { SiteAnalytics } from "@/components/SiteAnalytics";
 
-/** The public site. Admin deliberately sits outside this shell. */
+/**
+ * The public site. Admin deliberately sits outside this shell, which is also
+ * why analytics goes here rather than in the root layout: admin URLs carry
+ * customer ids, and none of that belongs in a third party's dashboard. Nobody
+ * needs a page-view count for the screen they use to run the business.
+ */
 export default function SiteLayout({ children }: LayoutProps<"/">) {
   return (
     <>
@@ -21,6 +27,7 @@ export default function SiteLayout({ children }: LayoutProps<"/">) {
         {children}
       </main>
       <Footer />
+      <SiteAnalytics />
     </>
   );
 }
