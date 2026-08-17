@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ButtonLink, Card, CheckIcon, Section, SectionHeading } from "@/components/ui";
 import { MembershipCards } from "@/components/MembershipCards";
 import { AddOnList } from "@/components/AddOnList";
@@ -36,7 +37,7 @@ export default function HomePage() {
     <>
       {/* Hero */}
       <section className="border-b border-hairline bg-panel">
-        <div className="mx-auto max-w-6xl px-5 py-20 md:py-28">
+        <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 py-20 md:py-28 lg:grid-cols-[1.15fr_1fr]">
           <div className="max-w-3xl">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
               {site.serviceArea}
@@ -54,6 +55,26 @@ export default function HomePage() {
                 See membership pricing
               </ButtonLink>
             </div>
+          </div>
+
+          {/* priority, because this is the largest thing above the fold and
+              lazy loading it would mean the hero arrives in two stages. */}
+          {/* Shown on every size. Most people looking for a local cleaner are
+              on a phone, and hiding the only photograph from them to save a
+              little bandwidth is the wrong trade. Shorter crop on small
+              screens so it does not push the buttons off the fold. */}
+          <div className="relative aspect-[3/2] overflow-hidden rounded-2xl lg:aspect-[4/5]">
+            <Image
+              src="/photography/kitchen-counter.jpg"
+              alt="A tidy kitchen counter with storage jars against white herringbone tile"
+              fill
+              // A 0px fallback made Next pick a 108px file for a 495px slot.
+              // The image is hidden below lg, so the second branch never
+              // applies, but it still has to describe a real size.
+              sizes="(min-width: 1024px) 40vw, 100vw"
+              className="object-cover"
+              priority
+            />
           </div>
         </div>
       </section>
@@ -74,6 +95,19 @@ export default function HomePage() {
           ))}
         </div>
       </Section>
+
+      {/* A pause between two dense sections. Decorative, so it carries an
+          empty alt rather than a description a screen reader would have to
+          sit through on the way to the pricing. */}
+      <div className="relative h-56 w-full md:h-72">
+        <Image
+          src="/photography/bedroom.jpg"
+          alt=""
+          fill
+          sizes="100vw"
+          className="object-cover"
+        />
+      </div>
 
       {/* Membership */}
       <Section tinted>
