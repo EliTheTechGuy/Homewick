@@ -54,13 +54,19 @@ export default async function proxy(request: NextRequest) {
   const onAdminHost = isAdminHost(request.headers.get("host"));
   const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
 
-  // The admin host serves admin and nothing else. Without this the whole
-  // marketing site answered there too: a second copy of every page on a
-  // second hostname, and a booking begun on it would have been handed back
-  // to the public origin by Stripe halfway through.
+  // Typing the admin address should land in admin. Anything else is a small
+  // daily annoyance: nobody visits this hostname to read about pricing.
+  if (onAdminHost && pathname === "/" && !isLocal(request.headers.get("host"))) {
+    return NextResponse.redirect(new URL("/admin", request.url));
+  }
+
+  // Every other public page still answered on the admin host, which meant two
+  // live copies of the site. /book was the one that mattered: a booking begun
+  // here would have been handed to Stripe and returned to the public origin
+  // partway through, because the success and cancel URLs are built from the
+  // configured site address rather than from whichever host somebody is on.
   //
-  // Localhost is exempt because development has no subdomains and both live
-  // on one origin there.
+  // Localhost is exempt because development has no subdomains.
   if (onAdminHost && !isAdminPath && !isLocal(request.headers.get("host"))) {
     const target = new URL(pathname + request.nextUrl.search, PUBLIC_ORIGIN);
     return NextResponse.redirect(target, 308);
