@@ -16,35 +16,11 @@ import {
 } from "@/lib/pricing";
 import { formatCents } from "@/lib/money";
 import { alertOwner } from "@/lib/alert";
+import { membershipProductId } from "@/lib/stripe-products";
 
 const UNIT_SIZE_IDS = UNIT_SIZES.map((u) => u.id) as [UnitSize, ...UnitSize[]];
 
 type Result = { ok: boolean; message: string };
-
-/**
- * The Stripe product to hang a membership price on.
- *
- * Checkout creates its own product from the inline price, but Stripe owns
- * that one: it cannot be renamed, and it is deactivated once the session is
- * done, so attaching a new price to it fails outright. So we keep one product
- * per apartment size that we own, found by metadata rather than by name, and
- * point the new price at that.
- */
-async function membershipProductId(size: UnitSize): Promise<string> {
-  const s = stripe();
-  const found = await s.products.search({
-    query: `active:'true' AND metadata['homewick_unit_size']:'${size}'`,
-    limit: 1,
-  });
-  if (found.data[0]) return found.data[0].id;
-
-  const created = await s.products.create({
-    name: `Homewick Membership, ${unitSizeLabel(size)}`,
-    description: "Two cleanings per billing period, one free add-on each period.",
-    metadata: { homewick_unit_size: size },
-  });
-  return created.id;
-}
 
 /** Form fields arrive as null when unrendered, and Zod optional wants undefined. */
 function field(form: FormData, name: string): string | undefined {

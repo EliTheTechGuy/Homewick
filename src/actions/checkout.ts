@@ -3,6 +3,7 @@
 import type Stripe from "stripe";
 import { queryOne } from "@/lib/db";
 import { isStripeConfigured, stripe } from "@/lib/stripe";
+import { membershipProductId } from "@/lib/stripe-products";
 import { site } from "@/lib/site";
 import {
   MEMBER_FIRST_MONTH_DISCOUNT,
@@ -62,8 +63,22 @@ type CustomerRow = {
  * litter the account with identical coupons. Stripe has no upsert for these,
  * so this retrieves first and creates only when it is genuinely absent.
  */
-async function firstMonthCoupon(): Promise<string> {
-  const id = `homewick-first-month-${Math.round(MEMBER_FIRST_MONTH_DISCOUNT * 100)}`;
+/**
+ * The welcome discount, restricted to the membership itself.
+ *
+ * Applied to the whole session it also came off the pet surcharge and any
+ * add-ons, because in subscription mode those become items on the same first
+ * invoice. The site quoted a 2 bed signup with pets and one add-on at $275.15
+ * while Stripe charged $268.17. The customer was undercharged, the $15 pet
+ * surcharge was really $12.75, and the member add-on discount was silently
+ * 23.5% instead of 10%.
+ *
+ * applies_to fixes it, and cannot be changed after creation, hence the v2 in
+ * the id: the old coupon still exists and still discounts everything, so it
+ * has to be left behind rather than edited.
+ */
+async function firstMonthCoupon(products: string[]): Promise<string> {
+  const id = `homewick-first-month-${Math.round(MEMBER_FIRST_MONTH_DISCOUNT * 100)}-v2`;
   const s = stripe();
 
   try {
@@ -75,6 +90,7 @@ async function firstMonthCoupon(): Promise<string> {
       percent_off: MEMBER_FIRST_MONTH_DISCOUNT * 100,
       duration: "once",
       name: "New member, first month",
+      applies_to: { products },
     });
     return id;
   }
@@ -115,6 +131,8 @@ async function membershipSession(subscriptionId: string) {
     [subscriptionId],
   );
 
+  const productId = await membershipProductId(row.unit_size);
+
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
     {
       quantity: 1,
@@ -122,10 +140,7 @@ async function membershipSession(subscriptionId: string) {
         currency: "usd",
         unit_amount: row.monthly_amount_cents,
         recurring: { interval: "month" },
-        product_data: {
-          name: `Homewick Membership, ${unitSizeLabel(row.unit_size)}`,
-          description: "Two cleanings per billing period, one free add-on each period.",
-        },
+        product: productId,
       },
     },
   ];
@@ -159,7 +174,7 @@ async function membershipSession(subscriptionId: string) {
     // once-duration coupon is how Stripe expresses that, and it keeps the
     // recurring price honest, the subscription really is $269/month, so a
     // rate change later does not have to unpick a bespoke first invoice.
-    discounts: [{ coupon: await firstMonthCoupon() }],
+    discounts: [{ coupon: await firstMonthCoupon([productId]) }],
     customer: row.stripe_customer_id ?? undefined,
     customer_email: row.stripe_customer_id ? undefined : row.email,
     success_url: `${site.url}/book/confirmed?ref=${subscriptionId}&session_id={CHECKOUT_SESSION_ID}`,
