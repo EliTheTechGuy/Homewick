@@ -291,9 +291,9 @@ export async function generateForSubscription(
       await client.query(
         `insert into visits
            (customer_id, property_id, subscription_id, period_id, origin,
-            service_type, status, scheduled_for, pet_surcharge_cents)
+            service_type, status, scheduled_for, pet_surcharge_cents, slot)
          values ($4, $5, $6, $7, 'membership', 'standard', $8::visit_state,
-                 ${timestamptzFromLocal(1, 2, 3)}, 0)`,
+                 ${timestamptzFromLocal(1, 2, 3)}, 0, $9)`,
         [
           date,
           DEFAULT_VISIT_TIME,
@@ -303,6 +303,10 @@ export async function generateForSubscription(
           sub.id,
           periodId,
           sub.status === "pending_payment" ? "pending_payment" : "scheduled",
+          // Which cleaning of the period this is. Stored rather than derived,
+          // because a member moving the second one earlier must not turn it
+          // into the first.
+          wanted.indexOf(date),
         ],
       );
       visitsCreated++;
