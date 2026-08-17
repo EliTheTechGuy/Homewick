@@ -56,6 +56,7 @@ export default function ServicesPage() {
     <>
       <Section>
         <SectionHeading
+          as="h1"
           eyebrow="Services"
           title="Three services, priced by apartment size."
           lead="We specialize in apartments. Pricing is published up front and does not change at the door."

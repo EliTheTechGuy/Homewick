@@ -27,7 +27,7 @@ export function RevealAccess({
     ].filter(([, value]) => value) as [string, string][];
 
     return (
-      <div className="rounded-xl border border-accent bg-accent/5 p-4">
+      <div role="status" className="rounded-xl border border-accent bg-accent/5 p-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-accent">
           Entry details, and this reveal was logged
         </p>
@@ -56,7 +56,9 @@ export function RevealAccess({
         {pending ? "Revealing…" : "Reveal entry details"}
       </button>
       {result && !result.ok && (
-        <p className="mt-2 text-sm text-red-700">{result.error}</p>
+        <p role="alert" className="mt-2 text-sm text-red-700">
+          {result.error}
+        </p>
       )}
     </div>
   );

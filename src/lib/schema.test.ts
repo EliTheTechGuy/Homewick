@@ -634,3 +634,123 @@ test("an uninvoiced period takes the new rate; an invoiced one never does", asyn
   assert.equal(after.rows[0].amount_cents, 26900, "money already taken stays as recorded");
   assert.equal(after.rows[1].amount_cents, 36900, "money not yet taken follows the new rate");
 });
+
+test("the slot survives a member reordering their two cleanings", async () => {
+  // The bug: which cleaning was "first" was worked out by counting how many
+  // fell earlier, which is only right while they stay in order. Move the
+  // second before the first and they swap, so the next move writes the
+  // remembered weekday to the wrong one.
+  const { customerId, propertyId } = await seedCustomer("slots@example.com");
+  const subscriptionId = await insertSubscription(customerId, propertyId, "2026-01-15", 15);
+  const period = (
+    await db.query<{ id: string }>(
+      `insert into subscription_periods
+         (subscription_id, period_start, period_end, visits_allotted, amount_cents)
+       values ($1, '2026-02-15', '2026-03-15', 2, 26900) returning id`,
+      [subscriptionId],
+    )
+  ).rows[0].id;
+
+  const makeVisit = async (on: string, slot: number) =>
+    (
+      await db.query<{ id: string }>(
+        `insert into visits
+           (customer_id, property_id, subscription_id, period_id, origin,
+            service_type, status, scheduled_for, slot)
+         values ($1, $2, $3, $4, 'membership', 'standard', 'scheduled',
+                 ($5::date + time '09:00') at time zone 'America/Chicago', $6)
+         returning id`,
+        [customerId, propertyId, subscriptionId, period, on, slot],
+      )
+    ).rows[0].id;
+
+  const first = await makeVisit("2026-02-17", 0);
+  const second = await makeVisit("2026-03-03", 1);
+
+  // The member moves the second one to before the first.
+  await db.query(
+    `update visits set scheduled_for = ('2026-02-16'::date + time '09:00')
+       at time zone 'America/Chicago' where id = $1`,
+    [second],
+  );
+
+  // Counting, which is what the old code did.
+  const counted = await db.query<{ n: number }>(
+    `select count(*)::int as n from visits other
+      where other.period_id = $1 and other.status <> 'canceled'
+        and other.scheduled_for < (select scheduled_for from visits where id = $2)`,
+    [period, second],
+  );
+  assert.equal(counted.rows[0].n, 0, "counting now calls the second cleaning the first");
+
+  // Reading the stored slot, which is what it does now.
+  const stored = await db.query<{ slot: number }>(
+    `select slot from visits where id = $1`,
+    [second],
+  );
+  assert.equal(stored.rows[0].slot, 1, "the stored slot is unchanged by a move");
+
+  const firstStored = await db.query<{ slot: number }>(
+    `select slot from visits where id = $1`,
+    [first],
+  );
+  assert.equal(firstStored.rows[0].slot, 0, "and neither is the other one");
+});
+
+test("realignment finds the right visit even when one is assigned", async () => {
+  // The bug: the lookup counted only 'scheduled' visits, so an assigned one
+  // shifted every later offset. A September period whose first clean was
+  // already assigned would have its second moved into the first week,
+  // collapsing both into one fortnight.
+  const { customerId, propertyId } = await seedCustomer("realign@example.com");
+  const subscriptionId = await insertSubscription(customerId, propertyId, "2026-01-15", 15);
+  const period = (
+    await db.query<{ id: string }>(
+      `insert into subscription_periods
+         (subscription_id, period_start, period_end, visits_allotted, amount_cents)
+       values ($1, '2026-02-15', '2026-03-15', 2, 26900) returning id`,
+      [subscriptionId],
+    )
+  ).rows[0].id;
+
+  const add = async (on: string, slot: number, status: string) =>
+    (
+      await db.query<{ id: string }>(
+        `insert into visits
+           (customer_id, property_id, subscription_id, period_id, origin,
+            service_type, status, scheduled_for, slot)
+         values ($1, $2, $3, $4, 'membership', 'standard', $7::visit_state,
+                 ($5::date + time '09:00') at time zone 'America/Chicago', $6)
+         returning id`,
+        [customerId, propertyId, subscriptionId, period, on, slot, status],
+      )
+    ).rows[0].id;
+
+  const assigned = await add("2026-02-17", 0, "assigned");
+  const open = await add("2026-03-03", 1, "scheduled");
+
+  // What the old code did: skip assigned, then take by position.
+  const byPosition = await db.query<{ id: string }>(
+    `select id from visits where period_id = $1 and status = 'scheduled'
+      order by scheduled_for offset 0 limit 1`,
+    [period],
+  );
+  assert.equal(
+    byPosition.rows[0].id,
+    open,
+    "counting positions returns the second cleaning when asked for the first",
+  );
+
+  // What it does now: look it up by slot.
+  const bySlot = await db.query<{ id: string; status: string }>(
+    `select id, status::text as status from visits
+      where period_id = $1 and slot = 0 and status <> 'canceled' limit 1`,
+    [period],
+  );
+  assert.equal(bySlot.rows[0].id, assigned, "the slot lookup returns the right visit");
+  assert.equal(
+    bySlot.rows[0].status,
+    "assigned",
+    "and it can then be recognised as committed work and left alone",
+  );
+});

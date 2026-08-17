@@ -32,7 +32,7 @@ export function JobAccess({
     ].filter(([, value]) => value) as [string, string][];
 
     return (
-      <div className="rounded-2xl border border-accent bg-accent/5 p-5">
+      <div role="status" className="rounded-2xl border border-accent bg-accent/5 p-5">
         <p className="text-xs font-semibold uppercase tracking-wider text-accent">
           Entry details
         </p>
@@ -80,7 +80,9 @@ export function JobAccess({
         Opening this is recorded against your name.
       </p>
       {result && !result.ok && (
-        <p className="mt-3 text-sm text-red-700">{result.error}</p>
+        <p role="alert" className="mt-3 text-sm text-red-700">
+          {result.error}
+        </p>
       )}
     </div>
   );
