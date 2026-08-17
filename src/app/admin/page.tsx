@@ -6,6 +6,7 @@ import { formatCents } from "@/lib/money";
 import { unitSizeLabel, type UnitSize } from "@/lib/pricing";
 import { RevealAccess } from "@/components/RevealAccess";
 import { MarkComplete } from "@/components/MarkComplete";
+import { MarkSkipped } from "@/components/MarkSkipped";
 import { AssignCleaner, type CleanerOption } from "@/components/admin/AssignCleaner";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { MonthCalendar, type DayCount } from "@/components/admin/MonthCalendar";
@@ -262,7 +263,12 @@ export default async function AdminTodayPage({
               <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-hairline pt-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <RevealAccess visitId={visit.id} propertyId={visit.property_id} />
-                  {visit.status !== "completed" && <MarkComplete visitId={visit.id} />}
+                  {visit.status !== "completed" && visit.status !== "skipped" && (
+                    <>
+                      <MarkComplete visitId={visit.id} />
+                      <MarkSkipped visitId={visit.id} />
+                    </>
+                  )}
                 </div>
                 <AssignCleaner
                   visitId={visit.id}

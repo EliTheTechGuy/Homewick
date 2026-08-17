@@ -3,6 +3,7 @@ import { query } from "../db";
 import { TIMEZONE, addDays, localHour, today, type ISODate } from "../dates";
 import { sendEmail } from "../email";
 import { site } from "../site";
+import { unsubscribeUrl } from "../unsubscribe-links";
 import { sendOnce } from "./send-once";
 import {
   feedbackRequestEmail,
@@ -244,6 +245,7 @@ async function sendFreeAddOnNudges(from: ISODate): Promise<number> {
           limit 1
        ) v on true
       where s.status in ('active', 'pending_cancellation')
+        and c.nudge_opt_out_at is null
         and sp.free_addon_used = false
         and sp.period_start <= ($1::date - $2::int)
         and sp.period_end > $1::date`,
@@ -260,6 +262,9 @@ async function sendFreeAddOnNudges(from: ISODate): Promise<number> {
       message: freeAddOnNudgeEmail({
         firstName: period.first_name,
         nextVisitDate: period.next_visit,
+        // The only message here that carries one. Everything else is about
+        // work somebody has paid for.
+        unsubscribeUrl: unsubscribeUrl(site.url, period.customer_id),
       }),
     }).catch((err) => {
       console.error(`[email] nudge failed for period ${period.period_id}`, err);

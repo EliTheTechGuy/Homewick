@@ -24,8 +24,15 @@ export function emailLayout(opts: {
   body?: string[];
   cta?: { label: string; url: string };
   footerNote?: string;
+  /**
+   * Only set on the messages that are not strictly transactional. The add-on
+   * nudge is the one: nobody asked for it, it arrives on a schedule, and it
+   * has a promotional tone, so it needs a way out that does not also stop the
+   * reminders somebody's access depends on.
+   */
+  unsubscribeUrl?: string;
 }): string {
-  const { heading, intro, rows = [], body = [], cta, footerNote } = opts;
+  const { heading, intro, rows = [], body = [], cta, footerNote, unsubscribeUrl } = opts;
 
   const rowsHtml = rows.length
     ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
@@ -90,8 +97,19 @@ export function emailLayout(opts: {
         }
         <p style="margin:0;font:12px/1.6 -apple-system,'Helvetica Neue',Arial,sans-serif;color:${MUTED};">
           ${escapeHtml(site.name)} · ${escapeHtml(site.serviceArea)}<br>
-          This address does not receive mail. To book or change a visit, use
-          <a href="${site.url}" style="color:${ACCENT};">${site.url.replace(/^https?:\/\//, "")}</a>.
+          ${
+            site.email
+              ? `Questions? <a href="mailto:${escapeHtml(site.email)}" style="color:${ACCENT};">${escapeHtml(site.email)}</a><br>`
+              : ""
+          }
+          Replies to this message are not read. To book or change a visit, use
+          <a href="${site.url}" style="color:${ACCENT};">${site.url.replace(/^https?:\/\//, "")}</a>.${
+            site.postalAddress ? `<br>${escapeHtml(site.postalAddress)}` : ""
+          }${
+            unsubscribeUrl
+              ? `<br><a href="${unsubscribeUrl}" style="color:${MUTED};">Stop these reminders</a>`
+              : ""
+          }
         </p>
       </td></tr>
     </table>
@@ -108,6 +126,7 @@ export function emailText(opts: {
   body?: string[];
   cta?: { label: string; url: string };
   footerNote?: string;
+  unsubscribeUrl?: string;
 }): string {
   const lines = [opts.heading, "", opts.intro, ""];
 
@@ -121,7 +140,10 @@ export function emailText(opts: {
   lines.push(
     "---",
     `${site.name} · ${site.serviceArea}`,
-    `This address does not receive mail. To book or change a visit, use ${site.url}.`,
+    ...(site.email ? [`Questions? ${site.email}`] : []),
+    `Replies to this message are not read. To book or change a visit, use ${site.url}.`,
+    ...(site.postalAddress ? [site.postalAddress] : []),
+    ...(opts.unsubscribeUrl ? [`Stop these reminders: ${opts.unsubscribeUrl}`] : []),
   );
   return lines.join("\n");
 }

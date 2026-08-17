@@ -29,6 +29,17 @@ export const site = {
    * behaviour for a preview deployment.
    */
   ownerEmail: process.env.OWNER_ALERT_EMAIL ?? null,
+  /**
+   * A real postal address, shown in email footers.
+   *
+   * Required on commercial email under CAN-SPAM, and a metro area is not an
+   * address. Harmless on transactional mail and awkward to be missing when a
+   * regulator asks, so it goes on everything.
+   *
+   * Unset simply omits the line, which is the honest failure: an invented
+   * address would be worse than none.
+   */
+  postalAddress: process.env.BUSINESS_POSTAL_ADDRESS ?? null,
 } as const;
 
 /** Bumped whenever the privacy policy changes. Shown on the page so a customer,

@@ -104,6 +104,12 @@ export function visitReminderEmail(params: {
 export function freeAddOnNudgeEmail(params: {
   firstName: string;
   nextVisitDate: ISODate;
+  /**
+   * This is the one message nobody asked for, so it is the one that carries a
+   * way out. Kept off the others deliberately: unsubscribing from a visit
+   * reminder means not knowing a cleaner is coming.
+   */
+  unsubscribeUrl?: string;
 }): Composed {
   return compose({
     subject: "Your free add-on this month",
@@ -114,6 +120,7 @@ export function freeAddOnNudgeEmail(params: {
       "It takes a moment, and picking it now means your cleaner arrives knowing to do it. It resets at the start of each month and does not carry over.",
     ],
     cta: { label: "Choose my free add-on", url: `${site.url}/account` },
+    unsubscribeUrl: params.unsubscribeUrl,
   });
 }
 
