@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateUpcomingVisits } from "@/lib/membership-lifecycle";
 import { sendScheduledEmails } from "@/lib/emails/scheduled";
+import { reconcileStripeRates } from "@/lib/stripe-reconcile";
 import { isDatabaseConfigured } from "@/lib/db";
 
 /**
@@ -40,6 +41,15 @@ export async function GET(request: Request) {
     // Email runs after generation and in its own try, so a mail provider
     // having a bad morning cannot stop visits being created. Losing a day of
     // scheduling is a real problem. Losing a day of reminders is not.
+    // A billing mismatch is worth fixing but not at the cost of the
+    // schedule, so it runs after generation and in its own try.
+    let reconciled = { attempted: 0, fixed: 0 };
+    try {
+      reconciled = await reconcileStripeRates();
+    } catch (err) {
+      console.error("Stripe reconciliation failed", err);
+    }
+
     let emails = { remindersSent: 0, nudgesSent: 0 };
     try {
       emails = await sendScheduledEmails();
@@ -47,7 +57,7 @@ export async function GET(request: Request) {
       console.error("Scheduled email failed", err);
     }
 
-    return NextResponse.json({ ok: true, ...generated, ...emails });
+    return NextResponse.json({ ok: true, ...generated, ...emails, reconciled });
   } catch (err) {
     console.error("Daily generation failed", err);
     return NextResponse.json({ error: "Generation failed." }, { status: 500 });

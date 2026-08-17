@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { transaction } from "@/lib/db";
+import { transaction, query } from "@/lib/db";
 import { currentMember } from "@/lib/member-auth";
 import { encryptSecret } from "@/lib/secrets";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
@@ -15,6 +15,7 @@ import {
   type UnitSize,
 } from "@/lib/pricing";
 import { formatCents } from "@/lib/money";
+import { alertOwner } from "@/lib/alert";
 
 const UNIT_SIZE_IDS = UNIT_SIZES.map((u) => u.id) as [UnitSize, ...UnitSize[]];
 
@@ -286,11 +287,14 @@ export async function changeMembershipSize(newSize: unknown): Promise<Result> {
         ok: true as const,
         message: `Changed to ${unitSizeLabel(size.data)}. Your rate becomes ${formatCents(newRate)} a month from ${formatLong(effectiveOn)}, and this month is unchanged.`,
         stripeSubscriptionId: sub.stripe_subscription_id,
+        subscriptionId: sub.id,
+        effectiveOn,
         newRate,
         size: size.data,
       };
     });
 
+    let synced = false;
     if (outcome.ok && outcome.stripeSubscriptionId && isStripeConfigured()) {
       // Stripe is what actually charges the card, so the database alone
       // changing nothing is worse than not offering this at all.
@@ -318,16 +322,44 @@ export async function changeMembershipSize(newSize: unknown): Promise<Result> {
             proration_behavior: "none",
           });
         }
+        synced = true;
       } catch (err) {
         console.error(
-          "[account] URGENT: size changed in database but Stripe still bills the old rate",
+          "[account] size changed in database but Stripe still bills the old rate",
           outcome.stripeSubscriptionId,
           err,
         );
       }
     }
 
+    // A rate the member has been promised but Stripe has not been told about
+    // is the worst state this action can end in, so it is written down rather
+    // than logged. The daily job retries it, and the owner is told now.
+    if (outcome.ok && outcome.stripeSubscriptionId && !synced) {
+      await query(
+        `update subscriptions set stripe_sync_needed_at = now() where id = $1`,
+        [outcome.subscriptionId],
+      ).catch((err) => console.error("[account] could not flag a failed sync", err));
+
+      await alertOwner(
+        "Rate change did not reach Stripe",
+        `A membership size change saved here but Stripe was not updated, so it is still billing the old amount.\n\n` +
+          `Subscription: ${outcome.stripeSubscriptionId}\n` +
+          `Should now be: ${formatCents(outcome.newRate)} a month from ${formatLong(outcome.effectiveOn)}\n\n` +
+          `It will be retried automatically by the daily job. Nothing is needed from you unless this keeps arriving.`,
+      );
+    }
+
     revalidatePath("/account");
+
+    // The member is only promised a price we know Stripe will charge.
+    if (outcome.ok && outcome.stripeSubscriptionId && !synced) {
+      return {
+        ok: true,
+        message: `Changed to ${unitSizeLabel(outcome.size)}. We are still confirming the new rate with our payment provider and will email you once it is set.`,
+      };
+    }
+
     return { ok: outcome.ok, message: outcome.message };
   } catch (err) {
     console.error("[account] size change failed", err);

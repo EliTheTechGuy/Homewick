@@ -16,6 +16,7 @@ import { sendEmail, signInEmail } from "@/lib/email";
 import { claimFreePerk, requestCancellation } from "@/lib/membership-lifecycle";
 import { TIMEZONE, formatLong } from "@/lib/dates";
 import { sendOnce } from "@/lib/emails/send-once";
+import { alertOwner } from "@/lib/alert";
 import { cancellationConfirmedEmail } from "@/lib/emails/templates";
 import { memberOverview } from "@/lib/member-account";
 import { isStripeConfigured, stripe } from "@/lib/stripe";
@@ -273,12 +274,24 @@ export async function cancelMembership(): Promise<{ ok: boolean; message: string
             : { cancel_at_period_end: true },
         );
       } catch (err) {
-        // Loud, because the member is now cancelled with us while Stripe may
-        // still bill them. That needs a human before the next invoice.
+        // The member is now cancelled with us while Stripe may still bill
+        // them, and they have been told in writing there will be no further
+        // charges. A log line would be found weeks later by way of a
+        // chargeback, so this one goes to an inbox.
         console.error(
-          `[billing] URGENT: subscription ${result.subscriptionId} cancelled in our ` +
+          `[billing] subscription ${result.subscriptionId} cancelled in our ` +
             `records but Stripe was not updated. It may keep charging.`,
           err,
+        );
+
+        await alertOwner(
+          "Cancellation did not reach Stripe",
+          `A member cancelled and has been told there will be no further charges, ` +
+            `but Stripe was not updated and may keep billing them.\n\n` +
+            `Subscription: ${result.subscriptionId}\n` +
+            `Member: ${member.email}\n\n` +
+            `This one needs you. Cancel it in the Stripe dashboard before their next ` +
+            `invoice date, then no further action is needed here.`,
         );
       }
     }
