@@ -44,7 +44,7 @@ export const site = {
 
 /** Bumped whenever the privacy policy changes. Shown on the page so a customer,
  * or a carrier reviewing a messaging campaign, can see which version they read. */
-export const PRIVACY_VERSION = "2026-08-16";
+export const PRIVACY_VERSION = "2026-08-17";
 
 /** Bumped whenever the service agreement text changes; recorded on acceptance. */
 export const TERMS_VERSION = "2026-08-16";
