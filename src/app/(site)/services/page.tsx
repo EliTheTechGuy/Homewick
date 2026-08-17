@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { ButtonLink, Card, CheckIcon, Section, SectionHeading } from "@/components/ui";
 import { AddOnList } from "@/components/AddOnList";
 import { PricingTable } from "@/components/PricingTable";
@@ -72,6 +73,29 @@ export default function ServicesPage() {
           ))}
         </div>
       </Section>
+
+      {/* Two rooms, shown rather than only listed. Both decorative next to a
+          list that already names every task, so neither is described twice. */}
+      <div className="mx-auto grid max-w-6xl gap-4 px-5 sm:grid-cols-2">
+        <div className="relative h-64 overflow-hidden rounded-2xl">
+          <Image
+            src="/photography/bathroom.jpg"
+            alt=""
+            fill
+            sizes="(min-width: 640px) 50vw, 100vw"
+            className="object-cover"
+          />
+        </div>
+        <div className="relative h-64 overflow-hidden rounded-2xl">
+          <Image
+            src="/photography/towels.jpg"
+            alt=""
+            fill
+            sizes="(min-width: 640px) 50vw, 100vw"
+            className="object-cover"
+          />
+        </div>
+      </div>
 
       <Section tinted>
         <SectionHeading eyebrow="What's included" title="Every standard clean covers this." />
