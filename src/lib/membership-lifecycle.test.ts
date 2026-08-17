@@ -3,6 +3,7 @@ import { test } from "vitest";
 import { addDays, addMonths, daysBetween, firstWeekdayOnOrAfter, today } from "./dates";
 import { visitReminderEmail } from "./emails/templates";
 import { quoteFor } from "./booking-schema";
+import { hashPassword, verifyPassword, passwordProblem } from "./passwords";
 import {
   MEMBERSHIP_PRICES,
   MEMBER_FIRST_MONTH_DISCOUNT,
@@ -516,4 +517,38 @@ test("every membership size quotes a first month of exactly 15 percent off", () 
     // Integer cents throughout; a fractional charge would be a rounding bug.
     assert.equal(Math.round(quote.totalCents), quote.totalCents);
   }
+});
+
+test("a password verifies against its own hash and nothing else", async () => {
+  const password = "four random words together";
+  const stored = await hashPassword(password);
+
+  assert.match(stored, /^scrypt\$32768\$8\$1\$[0-9a-f]{32}\$[0-9a-f]{128}$/, "shape");
+  assert.ok(!stored.includes(password), "the password itself must not survive in the hash");
+
+  assert.equal(await verifyPassword(password, stored), true);
+  assert.equal(await verifyPassword("four random words togethe", stored), false);
+  assert.equal(await verifyPassword("", stored), false);
+
+  // Same password, different salt, so two accounts sharing one password do
+  // not share a hash and cannot be spotted as identical in a leaked dump.
+  const again = await hashPassword(password);
+  assert.notEqual(stored, again, "each hash must carry its own salt");
+  assert.equal(await verifyPassword(password, again), true);
+});
+
+test("a broken or missing hash refuses rather than throwing", async () => {
+  // These reach verifyPassword from the sign-in path when no account matched,
+  // so throwing would turn a wrong address into a 500 and tell somebody the
+  // address was wrong. Refusing quietly is the whole point.
+  for (const bad of [null, "", "not-a-hash", "scrypt$abc$8$1$aa$bb", "scrypt$32768$8$1$zz"]) {
+    assert.equal(await verifyPassword("anything", bad), false, `should refuse: ${bad}`);
+  }
+});
+
+test("passwords too short or too obvious are rejected", () => {
+  assert.ok(passwordProblem("short"), "under the minimum");
+  assert.ok(passwordProblem("aaaaaaaaaaaaaaaa"), "one repeated character");
+  assert.ok(passwordProblem("homewick-cleaning-2026"), "contains the business name");
+  assert.equal(passwordProblem("scatter marble tundra ledger"), null, "four words is fine");
 });
