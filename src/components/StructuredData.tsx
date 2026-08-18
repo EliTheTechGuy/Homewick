@@ -29,7 +29,7 @@ export function StructuredData() {
     legalName: site.legalEntity,
     url: site.url,
     description:
-      "Membership apartment cleaning in the Dallas-Fort Worth metroplex. Two cleanings a month for one flat charge.",
+      "Apartment cleaning in the Dallas-Fort Worth metroplex. Standard, deep, and move in and out cleans, or a membership covering two cleanings a month for one flat charge.",
     ...(site.email ? { email: site.email } : {}),
     ...(site.phone ? { telephone: site.phone } : {}),
     priceRange: "$$",
