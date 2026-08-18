@@ -227,6 +227,21 @@ async function oneOffSession(visitId: string) {
     success_url: `${site.url}/book/confirmed/paid?ref=${visitId}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${site.url}/book?canceled=1`,
     metadata: { kind: "one_time", visit_id: visitId },
+    // A promotion code box on the one-time checkout, so a discount can be run
+    // without a deploy: a first-customer offer, a code on a flyer, a goodwill
+    // gesture after a clean went wrong.
+    //
+    // Only on this session, not the membership one. Stripe rejects a session
+    // carrying both allow_promotion_codes and discounts, verified against the
+    // API rather than assumed, and the membership session needs discounts for
+    // the automatic first-month coupon. Offering a code box there would mean
+    // giving up the discount every new member already gets.
+    //
+    // Note that visits still record what was quoted, not what was collected.
+    // Stripe remains the source of truth for money, which is the existing
+    // design, but it does mean a heavily discounted booking reads at full
+    // price in admin. Worth knowing before running a real promotion.
+    allow_promotion_codes: true,
   });
 
   return session.url ? { url: session.url } : { error: "Stripe did not return a URL." };
