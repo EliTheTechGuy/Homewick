@@ -32,10 +32,14 @@ export const SERVICE_TYPES: { id: ServiceType; label: string; blurb: string }[] 
       "A reset for a place that has not been cleaned in a while. Baseboards, buildup, and detail work included.",
   },
   {
+    // The id stays move_out because it is a database enum and the work is the
+    // same either way. Only the label changed, because half the people who
+    // need an empty-unit clean are moving in rather than out and were reading
+    // the old name as "not for me".
     id: "move_out",
-    label: "Move-Out",
+    label: "Move In & Out",
     blurb:
-      "An empty-unit clean aimed at the condition a leasing office inspects against.",
+      "An empty-unit clean, whether you are handing the keys back or picking them up. Aimed at the condition a leasing office inspects against.",
   },
 ];
 
