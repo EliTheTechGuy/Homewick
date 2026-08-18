@@ -134,15 +134,34 @@ export async function assignCleaner(
         return { ok: false as const, message: "No change, they were already on it." };
       }
 
+      // Pay is snapshotted here, from the cleaner's rate at the moment they
+      // take the job, and never recalculated afterwards. Raising somebody's
+      // rate must not quietly change what they were owed for work already
+      // done, and lowering it must not either.
+      //
+      // Left alone once the visit has been paid, so a reassignment after
+      // settlement cannot rewrite a figure that has already left the bank.
+      // Cleared on unassignment, but only while still unpaid.
       await client.query(
-        `update visits
+        `update visits v
             set assigned_cleaner_id = $2,
                 status = case
                            when $2::uuid is null and status = 'assigned' then 'scheduled'
                            when $2::uuid is not null and status = 'scheduled' then 'assigned'
                            else status
-                         end
-          where id = $1`,
+                         end,
+                cleaner_pay_cents = case
+                  when v.cleaner_paid_at is not null then v.cleaner_pay_cents
+                  when $2::uuid is null then null
+                  else (
+                    select case when c.pay_percent_bp is null then null
+                                else ((v.base_amount_cents + v.pet_surcharge_cents
+                                       + v.addons_amount_cents) * c.pay_percent_bp) / 10000
+                           end
+                      from cleaners c where c.id = $2::uuid
+                  )
+                end
+          where v.id = $1`,
         [visit.data, nextCleanerId],
       );
 
@@ -246,4 +265,87 @@ export async function notifyCleaner(
     // roll back an assignment that is otherwise correct.
     console.error(`[email] cleaner notification failed for visit ${visitId}`, err);
   }
+}
+
+/**
+ * Set what share of a visit a cleaner keeps, in whole percent.
+ *
+ * Applies to work assigned from now on. Visits already assigned keep the
+ * figure snapshotted at the time, because renegotiating a rate is not the same
+ * as retrospectively changing what somebody earned last week.
+ */
+export async function setCleanerRate(form: FormData): Promise<Result> {
+  const admin = await requireAdmin();
+  if (!admin) return { ok: false, message: "Not signed in." };
+
+  const id = z.string().uuid().safeParse(field(form, "cleanerId"));
+  if (!id.success) return { ok: false, message: "Unknown cleaner." };
+
+  const raw = field(form, "percent");
+  // Blank clears the rate, which is different from setting it to zero: one
+  // says "not agreed yet", the other says "they work for free".
+  if (raw === "") {
+    await query(`update cleaners set pay_percent_bp = null where id = $1`, [id.data]);
+    revalidatePath("/admin/pay");
+    return { ok: true, message: "Rate cleared." };
+  }
+
+  const percent = Number(raw);
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+    return { ok: false, message: "Enter a percentage between 0 and 100." };
+  }
+
+  await query(`update cleaners set pay_percent_bp = $2 where id = $1`, [
+    id.data,
+    Math.round(percent * 100),
+  ]);
+  revalidatePath("/admin/pay");
+  return { ok: true, message: `Rate set to ${percent}% of each visit.` };
+}
+
+/**
+ * Mark everything currently owed to one cleaner as paid.
+ *
+ * Settles the visits that were outstanding when the button was pressed, chosen
+ * by id rather than by re-running the "unpaid" query inside the update. A visit
+ * completed in the seconds between loading the page and confirming would
+ * otherwise be marked paid without being part of the amount actually sent.
+ *
+ * They all share one timestamp, which is what groups a week's run back together
+ * when reconciling against a bank statement later.
+ */
+export async function markCleanerPaid(form: FormData): Promise<Result> {
+  const admin = await requireAdmin();
+  if (!admin) return { ok: false, message: "Not signed in." };
+
+  const cleanerId = z.string().uuid().safeParse(field(form, "cleanerId"));
+  if (!cleanerId.success) return { ok: false, message: "Unknown cleaner." };
+
+  const visitIds = form
+    .getAll("visitId")
+    .filter((v): v is string => typeof v === "string");
+  const ids = z.array(z.string().uuid()).safeParse(visitIds);
+  if (!ids.success || ids.data.length === 0) {
+    return { ok: false, message: "Nothing outstanding to pay." };
+  }
+
+  const reference = field(form, "reference").slice(0, 200) || null;
+
+  const settled = await query<{ id: string }>(
+    `update visits
+        set cleaner_paid_at = now(),
+            cleaner_payment_ref = $3
+      where id = any($1::uuid[])
+        and assigned_cleaner_id = $2
+        and cleaner_paid_at is null
+        and cleaner_pay_cents is not null
+      returning id`,
+    [ids.data, cleanerId.data, reference],
+  );
+
+  revalidatePath("/admin/pay");
+  const n = settled.length;
+  return n
+    ? { ok: true, message: `Marked ${n} visit${n === 1 ? "" : "s"} as paid.` }
+    : { ok: false, message: "Those were already settled. Nothing changed." };
 }
