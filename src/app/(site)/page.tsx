@@ -6,21 +6,26 @@ import { AddOnList } from "@/components/AddOnList";
 import { MEMBER_BENEFITS } from "@/lib/pricing";
 import { site } from "@/lib/site";
 
+/**
+ * Deliberately written for both ways of buying. The page used to describe the
+ * membership as though it were the only option, which left somebody who wanted
+ * one deep clean before a lease inspection with no idea whether we would do it.
+ */
 const steps = [
   {
     n: "01",
     title: "Tell us about your place",
-    body: "Size, service, add-ons, pets, and how we get in. Booking takes a couple of minutes.",
+    body: "Size, service, add-ons, pets, and how we get in. Choose a single clean or a membership. Booking takes a couple of minutes.",
   },
   {
     n: "02",
-    title: "We schedule your two visits",
-    body: "Pick a preferred weekday. Your visits are placed inside your billing period and confirmed by email.",
+    title: "We schedule the visit",
+    body: "Pick the weekday that suits you. A single clean is booked for that date. A membership places two visits inside every billing period.",
   },
   {
     n: "03",
     title: "You come home to a clean apartment",
-    body: "One charge a month covers both visits. Nothing to arrange, nothing to negotiate at the door.",
+    body: "Paid online when you book, so there is nothing to arrange and nothing to negotiate at the door.",
   },
 ];
 
@@ -43,16 +48,17 @@ export default function HomePage() {
               {site.serviceArea}
             </p>
             <h1 className="mt-4 text-4xl font-semibold leading-[1.1] text-navy md:text-6xl">
-              A clean apartment, every two weeks, without thinking about it.
+              A clean apartment, without the back and forth.
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted">
-              Homewick is a membership cleaning service for apartments. Two cleanings
-              a month, one flat charge, and a standard that does not move.
+              Standard cleans, deep cleans, and move in and out. Priced up front,
+              booked online, and held to a standard that does not move. Book a single
+              visit, or join the membership and have it handled every month.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
               <ButtonLink href="/book">Book online</ButtonLink>
-              <ButtonLink href="/membership" variant="secondary">
-                See membership pricing
+              <ButtonLink href="/pricing" variant="secondary">
+                See pricing
               </ButtonLink>
             </div>
           </div>
@@ -83,7 +89,7 @@ export default function HomePage() {
       <Section>
         <SectionHeading
           eyebrow="How it works"
-          title="Three steps, then it runs itself."
+          title="Three steps, and we take it from there."
         />
         <div className="mt-12 grid gap-8 md:grid-cols-3">
           {steps.map((s) => (
