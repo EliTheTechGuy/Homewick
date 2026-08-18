@@ -3,7 +3,7 @@
 import type Stripe from "stripe";
 import { queryOne } from "@/lib/db";
 import { isStripeConfigured, stripe } from "@/lib/stripe";
-import { membershipProductId } from "@/lib/stripe-products";
+import { allMembershipProductIds, membershipProductId } from "@/lib/stripe-products";
 import { site } from "@/lib/site";
 import {
   MEMBER_FIRST_MONTH_DISCOUNT,
@@ -57,28 +57,30 @@ type CustomerRow = {
 };
 
 /**
- * The new-member discount, as a Stripe coupon.
+ * The first-month discount, scoped to every membership product at once.
  *
- * Created once and then reused by a fixed id, so repeated signups do not
- * litter the account with identical coupons. Stripe has no upsert for these,
- * so this retrieves first and creates only when it is genuinely absent.
+ * Reused by a fixed id so repeated signups do not litter the account with
+ * identical coupons. Stripe has no upsert, so this retrieves first and creates
+ * only when genuinely absent.
+ *
+ * It takes no argument on purpose. The previous version was handed only the
+ * product being booked, and since the retrieve path returns an existing coupon
+ * without checking what it covers, whichever apartment size booked first
+ * defined the coupon's scope permanently. Members of the other two sizes then
+ * got no discount at all, silently, while the pricing page promised 15% off.
+ *
+ * The restriction itself still matters for the original reason: applied to the
+ * whole session, the discount also came off the pet surcharge and any add-ons,
+ * because in subscription mode those land on the same first invoice. The site
+ * quoted a 2 bed signup with pets and one add-on at $275.15 while Stripe
+ * charged $268.17.
+ *
+ * Neither could be repaired in place. Stripe fixes applies_to at creation and
+ * rejects it on update, which is why this is v3 rather than an edit: the older
+ * coupons still exist and still behave the old way, so they are left behind.
  */
-/**
- * The welcome discount, restricted to the membership itself.
- *
- * Applied to the whole session it also came off the pet surcharge and any
- * add-ons, because in subscription mode those become items on the same first
- * invoice. The site quoted a 2 bed signup with pets and one add-on at $275.15
- * while Stripe charged $268.17. The customer was undercharged, the $15 pet
- * surcharge was really $12.75, and the member add-on discount was silently
- * 23.5% instead of 10%.
- *
- * applies_to fixes it, and cannot be changed after creation, hence the v2 in
- * the id: the old coupon still exists and still discounts everything, so it
- * has to be left behind rather than edited.
- */
-async function firstMonthCoupon(products: string[]): Promise<string> {
-  const id = `homewick-first-month-${Math.round(MEMBER_FIRST_MONTH_DISCOUNT * 100)}-v2`;
+async function firstMonthCoupon(): Promise<string> {
+  const id = `homewick-first-month-${Math.round(MEMBER_FIRST_MONTH_DISCOUNT * 100)}-v3`;
   const s = stripe();
 
   try {
@@ -90,7 +92,11 @@ async function firstMonthCoupon(products: string[]): Promise<string> {
       percent_off: MEMBER_FIRST_MONTH_DISCOUNT * 100,
       duration: "once",
       name: "New member, first month",
-      applies_to: { products },
+      // All three sizes, so the coupon is complete the moment it exists.
+      // Restricted rather than open, because an unrestricted coupon also
+      // discounts the pet surcharge and any add-ons, which are not part of
+      // the offer.
+      applies_to: { products: await allMembershipProductIds() },
     });
     return id;
   }
@@ -174,7 +180,7 @@ async function membershipSession(subscriptionId: string) {
     // once-duration coupon is how Stripe expresses that, and it keeps the
     // recurring price honest, the subscription really is $269/month, so a
     // rate change later does not have to unpick a bespoke first invoice.
-    discounts: [{ coupon: await firstMonthCoupon([productId]) }],
+    discounts: [{ coupon: await firstMonthCoupon() }],
     customer: row.stripe_customer_id ?? undefined,
     customer_email: row.stripe_customer_id ? undefined : row.email,
     success_url: `${site.url}/book/confirmed/paid?ref=${subscriptionId}&session_id={CHECKOUT_SESSION_ID}`,
