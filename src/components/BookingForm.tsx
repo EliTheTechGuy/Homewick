@@ -375,7 +375,7 @@ export function BookingForm({
         >
           {plan === "membership" ? (
             <label className="block">
-              <span className="text-sm font-medium text-body">Preferred weekday</span>
+              <span className="text-sm font-medium text-body">Preferred day</span>
               <select
                 value={preferredWeekday}
                 onChange={(e) => setPreferredWeekday(e.target.value)}

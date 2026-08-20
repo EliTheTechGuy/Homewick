@@ -3,7 +3,7 @@ import Image from "next/image";
 import { ButtonLink, Card, CheckIcon, Section, SectionHeading } from "@/components/ui";
 import { MembershipCards } from "@/components/MembershipCards";
 import { AddOnList } from "@/components/AddOnList";
-import { MEMBER_BENEFITS } from "@/lib/pricing";
+import { MEMBER_BENEFITS, SERVICE_PRICES, SERVICE_TYPES } from "@/lib/pricing";
 import { site } from "@/lib/site";
 
 /**
@@ -15,17 +15,17 @@ const steps = [
   {
     n: "01",
     title: "Tell us about your place",
-    body: "Size, service, add-ons, pets, and how we get in. Choose a single clean or a membership. Booking takes a couple of minutes.",
+    body: "Size, service, add-ons, pets, and how we get in. Booking takes a couple of minutes, and you see the price before you pay.",
   },
   {
     n: "02",
     title: "We schedule the visit",
-    body: "Pick the weekday that suits you. A single clean is booked for that date. A membership places two visits inside every billing period.",
+    body: "Pick any day that suits you, weekends included. A single clean is booked for that date. A membership places two visits inside every billing period.",
   },
   {
     n: "03",
     title: "You come home to a clean apartment",
-    body: "Paid online when you book, so there is nothing to arrange and nothing to negotiate at the door.",
+    body: "Paid online when you book, so there is nothing to arrange and nothing to negotiate at the door. Book again whenever you like, or put it on a membership so you never have to.",
   },
 ];
 
@@ -51,9 +51,9 @@ export default function HomePage() {
               A clean apartment, without the back and forth.
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted">
-              Standard cleans, deep cleans, and move in and out. Priced up front,
-              booked online, and held to a standard that does not move. Book a single
-              visit, or join the membership and have it handled every month.
+              Standard cleans, deep cleans, and move in and out. Priced up front and
+              booked online in a couple of minutes. Book one when you need it, or join
+              the membership and stop thinking about it.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
               <ButtonLink href="/book">Book online</ButtonLink>
@@ -115,12 +115,51 @@ export default function HomePage() {
         />
       </div>
 
+      {/* Services.
+          Sits ahead of the membership on purpose. Somebody arriving cold used
+          to meet a subscription before they had been told what we clean or
+          what it costs, and a good number of them wanted one deep clean before
+          a lease inspection and left assuming we only sold memberships. What
+          we do comes first; how to buy it repeatedly comes after. */}
+      <Section>
+        <SectionHeading
+          eyebrow="What we do"
+          title="Three cleans, priced up front."
+          lead="Book any of them as a single visit. Nothing here needs a membership."
+        />
+        <div className="mt-12 grid gap-6 md:grid-cols-3">
+          {SERVICE_TYPES.map((service) => {
+            // The smallest apartment sets the "from" figure, so the number a
+            // visitor sees is one somebody can actually pay rather than an
+            // average nobody is charged.
+            const from = Math.min(
+              ...Object.values(SERVICE_PRICES).map((sizes) => sizes[service.id]),
+            );
+            return (
+              <Card key={service.id}>
+                <h3 className="text-xl font-semibold text-navy">{service.label}</h3>
+                <p className="mt-1 text-sm font-medium text-accent">
+                  from ${(from / 100).toFixed(0)}
+                </p>
+                <p className="mt-3 leading-relaxed text-muted">{service.blurb}</p>
+              </Card>
+            );
+          })}
+        </div>
+        <div className="mt-10 flex flex-wrap gap-3">
+          <ButtonLink href="/book">Book a clean</ButtonLink>
+          <ButtonLink href="/pricing" variant="secondary">
+            See every price
+          </ButtonLink>
+        </div>
+      </Section>
+
       {/* Membership */}
       <Section tinted>
         <SectionHeading
-          eyebrow="Membership"
-          title="Two cleanings every month, one simple charge."
-          lead="Members save 15% on every visit compared with booking one at a time."
+          eyebrow="Or join the membership"
+          title="Cleaning twice a month, handled for you."
+          lead="For places that need it regularly. Two cleanings a month on one charge, at 15% less than booking them one at a time."
           centered
         />
         <MembershipCards className="mt-12" />
@@ -183,7 +222,8 @@ export default function HomePage() {
               Spotless apartments for easier living
             </h2>
             <p className="mt-2 text-white/80">
-              Serving the {site.serviceArea}. Book in a couple of minutes.
+              One clean or every month, whichever suits. Booking takes a couple of
+              minutes.
             </p>
           </div>
           <ButtonLink href="/book" variant="onDark" className="shrink-0">
