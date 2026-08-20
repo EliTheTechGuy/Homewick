@@ -20,8 +20,6 @@ type Row = {
   phone: string;
   address: string | null;
   square_feet: number | null;
-  bedrooms: number | null;
-  bathrooms: number | null;
   has_pets: boolean;
   service_type: string;
   frequency: string | null;
@@ -42,7 +40,7 @@ export default async function EnquiriesPage() {
 
   const rows = await query<Row>(
     `select id, name, email::text as email, phone, address, square_feet,
-            bedrooms, bathrooms, has_pets, service_type, frequency, message, status,
+            has_pets, service_type, frequency, message, status,
             to_char(created_at at time zone $1, 'FMMon FMDD, FMHH12:MI am') as received
        from enquiries
       order by (status in ('new', 'quoted')) desc, created_at desc
@@ -94,9 +92,6 @@ export default async function EnquiriesPage() {
               <dl className="mt-4 grid gap-x-8 gap-y-2 border-t border-hairline pt-4 text-sm sm:grid-cols-2">
                 {r.address && <Fact label="Address" value={r.address} />}
                 {r.square_feet && <Fact label="Size" value={`about ${r.square_feet} sq ft`} />}
-                {r.bedrooms != null && (
-                  <Fact label="Rooms" value={`${r.bedrooms} bed, ${r.bathrooms ?? "?"} bath`} />
-                )}
                 <Fact label="Service" value={r.service_type.replace("_", " ")} />
                 {r.frequency && <Fact label="How often" value={r.frequency} />}
                 {r.has_pets && <Fact label="Pets" value="Yes" />}

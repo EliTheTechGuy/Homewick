@@ -25,8 +25,6 @@ const schema = z.object({
   phone: z.string().trim().min(7, "A phone number is required").max(40),
   address: z.string().trim().max(300).optional(),
   squareFeet: z.coerce.number().int().min(100).max(30000).optional(),
-  bedrooms: z.coerce.number().int().min(0).max(20).optional(),
-  bathrooms: z.coerce.number().int().min(0).max(20).optional(),
   hasPets: z.boolean(),
   serviceType: z.enum(["standard", "deep", "move_out", "not_sure"]),
   frequency: z.string().trim().max(120).optional(),
@@ -52,8 +50,6 @@ export async function submitEnquiry(form: FormData): Promise<EnquiryResult> {
     phone: text("phone"),
     address: text("address") || undefined,
     squareFeet: optionalNumber(form.get("squareFeet")),
-    bedrooms: optionalNumber(form.get("bedrooms")),
-    bathrooms: optionalNumber(form.get("bathrooms")),
     hasPets: form.get("hasPets") === "on",
     serviceType: text("serviceType") || "not_sure",
     frequency: text("frequency") || undefined,
@@ -72,17 +68,15 @@ export async function submitEnquiry(form: FormData): Promise<EnquiryResult> {
   try {
     await query(
       `insert into enquiries
-         (name, email, phone, address, square_feet, bedrooms, bathrooms,
+         (name, email, phone, address, square_feet,
           has_pets, service_type, frequency, message, ip_address, user_agent)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
         input.name,
         input.email,
         input.phone,
         input.address ?? null,
         input.squareFeet ?? null,
-        input.bedrooms ?? null,
-        input.bathrooms ?? null,
         input.hasPets,
         input.serviceType,
         input.frequency ?? null,
@@ -108,7 +102,6 @@ export async function submitEnquiry(form: FormData): Promise<EnquiryResult> {
       `${input.name}, ${input.email}, ${input.phone}`,
       input.address ? `Address: ${input.address}` : null,
       input.squareFeet ? `About ${input.squareFeet} sq ft` : null,
-      input.bedrooms != null ? `${input.bedrooms} bed, ${input.bathrooms ?? "?"} bath` : null,
       `Service: ${input.serviceType.replace("_", " ")}`,
       input.frequency ? `How often: ${input.frequency}` : null,
       input.hasPets ? "Has pets" : null,

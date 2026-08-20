@@ -63,17 +63,13 @@ export function EnquiryForm() {
         <input name="address" className={field} />
       </Label>
 
-      <div className="grid gap-5 sm:grid-cols-3">
-        <Label label="Square feet" hint="A rough guess is fine.">
-          <input name="squareFeet" type="number" min={100} max={30000} className={field} />
-        </Label>
-        <Label label="Bedrooms">
-          <input name="bedrooms" type="number" min={0} max={20} className={field} />
-        </Label>
-        <Label label="Bathrooms">
-          <input name="bathrooms" type="number" min={0} max={20} className={field} />
-        </Label>
-      </div>
+      {/* Square footage only. Bedroom and bathroom counts were asked for and
+          then ignored, since the price comes off square footage, and every
+          field that does not change the answer is somewhere a person can
+          decide the form is too much effort. */}
+      <Label label="Square feet" hint="A rough guess is fine, and you can leave it blank.">
+        <input name="squareFeet" type="number" min={100} max={30000} className={field} />
+      </Label>
 
       <div className="grid gap-5 sm:grid-cols-2">
         <Label label="What kind of clean">
