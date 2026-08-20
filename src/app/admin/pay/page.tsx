@@ -24,6 +24,7 @@ type Row = {
   service_type: string | null;
   visit_total_cents: number | null;
   pay_cents: number | null;
+  is_lead: boolean | null;
 };
 
 function money(cents: number): string {
@@ -53,12 +54,13 @@ export default async function CleanerPayPage() {
             v.service_type::text as service_type,
             (v.base_amount_cents + v.pet_surcharge_cents + v.addons_amount_cents)
               as visit_total_cents,
-            v.cleaner_pay_cents as pay_cents
+            vc.pay_cents as pay_cents,
+            vc.is_lead
        from cleaners c
+       left join visit_cleaners vc
+         on vc.cleaner_id = c.id and vc.paid_at is null
        left join visits v
-         on v.assigned_cleaner_id = c.id
-        and v.status = 'completed'
-        and v.cleaner_paid_at is null
+         on v.id = vc.visit_id and v.status = 'completed'
       order by c.is_active desc, c.first_name, v.scheduled_for`,
     [TIMEZONE],
   );
@@ -66,6 +68,8 @@ export default async function CleanerPayPage() {
   const byCleaner = new Map<string, { meta: Row; visits: Row[] }>();
   for (const r of rows) {
     const entry = byCleaner.get(r.cleaner_id) ?? { meta: r, visits: [] };
+    // A row with no visit is a cleaner with nothing outstanding, which the
+    // left join produces and which should not read as a job.
     if (r.visit_id) entry.visits.push(r);
     byCleaner.set(r.cleaner_id, entry);
   }
@@ -125,6 +129,7 @@ export default async function CleanerPayPage() {
                 serviceType: v.service_type as string,
                 visitTotalCents: v.visit_total_cents ?? 0,
                 payCents: v.pay_cents,
+                isLead: v.is_lead ?? false,
               }))}
             />
           ))}

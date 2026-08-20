@@ -34,6 +34,7 @@ export function ManualBookingForm() {
   const [plan, setPlan] = useState<"single" | "recurring">("recurring");
   const [intervalDays, setIntervalDays] = useState(21);
   const [entryMethod, setEntryMethod] = useState("none");
+  const [propertyKind, setPropertyKind] = useState<"apartment" | "house">("apartment");
   const [result, setResult] = useState<{
     ok: boolean;
     message: string;
@@ -54,6 +55,10 @@ export function ManualBookingForm() {
         city: String(data.get("city") ?? ""),
         postalCode: String(data.get("postalCode") ?? ""),
         unitSize: String(data.get("unitSize") ?? ""),
+        propertyKind,
+        bedrooms: propertyKind === "house" ? Number(data.get("bedrooms")) || undefined : undefined,
+        bathrooms: propertyKind === "house" ? Number(data.get("bathrooms")) || undefined : undefined,
+        squareFeet: propertyKind === "house" ? Number(data.get("squareFeet")) || undefined : undefined,
         hasPets: data.get("hasPets") === "on",
         entryMethod,
         entryDetail: String(data.get("entryDetail") ?? ""),
@@ -102,6 +107,28 @@ export function ManualBookingForm() {
 
       <section>
         <h2 className="text-lg font-semibold text-navy">Property</h2>
+
+        {/* This is not cosmetic: it decides which pay model the crew on every
+            visit here is paid under. A house splits half the price across the
+            crew with a lead premium; an apartment pays one cleaner their own
+            percentage. */}
+        <div className="mt-4 flex gap-2">
+          {(["apartment", "house"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setPropertyKind(k)}
+              className={
+                propertyKind === k
+                  ? "rounded-full bg-navy px-4 py-2 text-sm font-semibold text-white"
+                  : "rounded-full border border-hairline px-4 py-2 text-sm font-medium text-muted"
+              }
+            >
+              {k === "apartment" ? "Apartment" : "House"}
+            </button>
+          ))}
+        </div>
+
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <Label label="Street address">
             <input name="line1" required className={field} />
@@ -115,7 +142,7 @@ export function ManualBookingForm() {
           <Label label="ZIP">
             <input name="postalCode" required className={field} />
           </Label>
-          <Label label="Size">
+          <Label label={propertyKind === "house" ? "Nearest bracket" : "Size"}>
             <select name="unitSize" className={field} defaultValue="2br_2ba">
               {UNIT_SIZES.map((u) => (
                 <option key={u.id} value={u.id}>
@@ -124,6 +151,28 @@ export function ManualBookingForm() {
               ))}
             </select>
           </Label>
+          {propertyKind === "house" && (
+            <>
+              <Label label="Bedrooms">
+                <input name="bedrooms" type="number" min={0} max={20} className={field} />
+              </Label>
+              <Label label="Bathrooms">
+                <input
+                  name="bathrooms"
+                  type="number"
+                  min={0}
+                  max={20}
+                  step="0.5"
+                  placeholder="3.5"
+                  className={field}
+                />
+              </Label>
+              <Label label="Square feet">
+                <input name="squareFeet" type="number" min={100} max={30000} className={field} />
+              </Label>
+            </>
+          )}
+
           <label className="flex items-end gap-2 pb-2 text-sm">
             <input name="hasPets" type="checkbox" className="h-4 w-4" />
             <span className="text-body">Pets in the home</span>
