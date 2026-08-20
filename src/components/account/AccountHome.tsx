@@ -10,6 +10,7 @@ import {
 import { formatLong } from "@/lib/dates";
 import { formatCents } from "@/lib/money";
 import { FREE_PERK_ELIGIBLE, unitSizeLabel } from "@/lib/pricing";
+import { cadenceLabel, periodNoun } from "@/lib/cadence";
 import type { MemberOverview } from "@/lib/member-account";
 import type { Member } from "@/lib/member-auth";
 import { Card } from "@/components/ui";
@@ -91,11 +92,13 @@ export function AccountHome({
           <>
             <p className="mt-2 text-body">
               {unitSizeLabel(subscription.unitSize)} ·{" "}
-              {formatCents(subscription.monthlyAmountCents)} a month
+              {formatCents(subscription.monthlyAmountCents)}{" "}
+              {cadenceLabel(subscription.intervalDays)}
             </p>
             {currentPeriod && (
               <p className="mt-1 text-sm text-muted">
-                This month: {currentPeriod.visitsUsed} of {currentPeriod.visitsAllotted}{" "}
+                {periodNoun(subscription.intervalDays)}: {currentPeriod.visitsUsed} of{" "}
+                {currentPeriod.visitsAllotted}{" "}
                 cleanings scheduled, through {formatLong(currentPeriod.endsOn)}.
               </p>
             )}
