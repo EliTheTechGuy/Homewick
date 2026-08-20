@@ -29,8 +29,8 @@ export function EnquiryForm() {
   if (done) {
     return (
       <div role="status" className="rounded-2xl border border-hairline bg-panel p-6">
-        <h3 className="text-lg font-semibold text-navy">Request sent</h3>
-        <p className="mt-2 leading-relaxed text-body">{done}</p>
+        <h3 className="text-lg font-semibold text-navy">Thanks, we have got it</h3>
+        <p className="mt-3 leading-relaxed text-body">{done}</p>
       </div>
     );
   }
@@ -47,7 +47,7 @@ export function EnquiryForm() {
       className="space-y-5"
     >
       <div className="grid gap-5 sm:grid-cols-2">
-        <Label label="Your name">
+        <Label label="Your full name">
           <input name="name" required className={field} />
         </Label>
         <Label label="Phone">

@@ -125,9 +125,13 @@ export async function submitEnquiry(form: FormData): Promise<EnquiryResult> {
     });
   }
 
+  // Short on purpose. Families book these, and the previous version explained
+  // that a real person reads it and that we might be out on a job, neither of
+  // which anybody asked and both of which read as making excuses in advance.
+  // The spam line stays because it is the only thing here worth acting on.
   return {
     ok: true,
     message:
-      "Got it. We will come back to you with a price, usually the same day. Check your spam folder if you do not hear from us.",
+      "We will take a look and come back with a price, usually the same day. Do keep an eye on your spam folder, just in case.",
   };
 }
