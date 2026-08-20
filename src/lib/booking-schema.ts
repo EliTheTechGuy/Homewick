@@ -89,7 +89,7 @@ export const bookingSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["preferredWeekday"],
-        message: "Choose a preferred weekday",
+        message: "Choose a preferred day",
       });
     }
     // The free perk is a membership entitlement and must be an eligible add-on.

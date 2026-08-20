@@ -126,7 +126,15 @@ export function formatLong(date: ISODate, timeZone: string = TIMEZONE): string {
   }).format(new Date(`${date}T12:00:00Z`));
 }
 
+/**
+ * Every day, Sunday included. Named WEEKDAYS for historical reasons and
+ * because the database column is preferred_weekday, but the list is not
+ * limited to Monday through Friday and never was: Saturday was always here.
+ * Sunday was the only day missing, and excluding it was turning away work for
+ * no reason anybody could name.
+ */
 export const WEEKDAYS = [
+  { value: 0, label: "Sunday" },
   { value: 1, label: "Monday" },
   { value: 2, label: "Tuesday" },
   { value: 3, label: "Wednesday" },
