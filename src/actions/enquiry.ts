@@ -3,7 +3,9 @@
 import { headers } from "next/headers";
 import { z } from "zod";
 import { query } from "@/lib/db";
-import { alertOwner } from "@/lib/alert";
+import { sendEmail } from "@/lib/email";
+import { site } from "@/lib/site";
+import { enquiryAlertEmail } from "@/lib/emails/enquiry-alert";
 
 /**
  * A request to be quoted for a house.
@@ -96,21 +98,32 @@ export async function submitEnquiry(form: FormData): Promise<EnquiryResult> {
   // A lead that sits unseen is a lost one, and nobody refreshes an admin page
   // hoping for work. Sent after the row is safely stored, and never allowed to
   // fail the submission: the enquiry is already captured either way.
-  await alertOwner(
-    `Quote request from ${input.name}`,
-    [
-      `${input.name}, ${input.email}, ${input.phone}`,
-      input.address ? `Address: ${input.address}` : null,
-      input.squareFeet ? `About ${input.squareFeet} sq ft` : null,
-      `Service: ${input.serviceType.replace("_", " ")}`,
-      input.frequency ? `How often: ${input.frequency}` : null,
-      input.hasPets ? "Has pets" : null,
-      input.message ? `\n${input.message}` : null,
-      `\nQuote them, then create the booking under New booking in admin.`,
-    ]
-      .filter(Boolean)
-      .join("\n"),
-  );
+  //
+  // Deliberately not alertOwner. That channel exists for the two failures
+  // worth waking somebody for, subjects itself "Homewick needs a look", and
+  // is plain text. A quote request is work arriving, and needs to be readable
+  // on a phone like every other message this business sends.
+  if (site.ownerEmail) {
+    const mail = enquiryAlertEmail({
+      name: input.name,
+      email: input.email,
+      phone: input.phone,
+      address: input.address,
+      squareFeet: input.squareFeet,
+      hasPets: input.hasPets,
+      serviceType: input.serviceType,
+      frequency: input.frequency,
+      message: input.message,
+    });
+    await sendEmail({
+      to: site.ownerEmail,
+      subject: mail.subject,
+      text: mail.text,
+      html: mail.html,
+    }).catch((err) => {
+      console.error("[enquiry] alert did not send, the lead is still saved", err);
+    });
+  }
 
   return {
     ok: true,

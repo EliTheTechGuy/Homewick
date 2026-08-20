@@ -31,8 +31,15 @@ export function emailLayout(opts: {
    * reminders somebody's access depends on.
    */
   unsubscribeUrl?: string;
+  /**
+   * A message to the operator rather than to a customer. Swaps the footer:
+   * "replies are not read, use the site to book a visit" is nonsense on an
+   * email telling somebody a lead just arrived, and the postal address is
+   * there for CAN-SPAM, which does not govern mail to yourself.
+   */
+  internal?: boolean;
 }): string {
-  const { heading, intro, rows = [], body = [], cta, footerNote, unsubscribeUrl } = opts;
+  const { heading, intro, rows = [], body = [], cta, footerNote, unsubscribeUrl, internal } = opts;
 
   const rowsHtml = rows.length
     ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
@@ -96,15 +103,18 @@ export function emailLayout(opts: {
             : ""
         }
         <p style="margin:0;font:12px/1.6 -apple-system,'Helvetica Neue',Arial,sans-serif;color:${MUTED};">
-          ${escapeHtml(site.name)} · ${escapeHtml(site.serviceArea)}<br>
+          ${escapeHtml(site.name)}${internal ? "" : ` · ${escapeHtml(site.serviceArea)}`}<br>
           ${
-            site.email
-              ? `Questions? <a href="mailto:${escapeHtml(site.email)}" style="color:${ACCENT};">${escapeHtml(site.email)}</a><br>`
-              : ""
-          }
-          Replies to this message are not read. To book or change a visit, use
+            internal
+              ? "Automatic notification from your site."
+              : `${
+                  site.email
+                    ? `Questions? <a href="mailto:${escapeHtml(site.email)}" style="color:${ACCENT};">${escapeHtml(site.email)}</a><br>`
+                    : ""
+                }Replies to this message are not read. To book or change a visit, use
           <a href="${site.url}" style="color:${ACCENT};">${site.url.replace(/^https?:\/\//, "")}</a>.${
-            site.postalAddress ? `<br>${escapeHtml(site.postalAddress)}` : ""
+                  site.postalAddress ? `<br>${escapeHtml(site.postalAddress)}` : ""
+                }`
           }${
             unsubscribeUrl
               ? `<br><a href="${unsubscribeUrl}" style="color:${MUTED};">Stop these reminders</a>`
@@ -127,6 +137,7 @@ export function emailText(opts: {
   cta?: { label: string; url: string };
   footerNote?: string;
   unsubscribeUrl?: string;
+  internal?: boolean;
 }): string {
   const lines = [opts.heading, "", opts.intro, ""];
 
@@ -139,10 +150,14 @@ export function emailText(opts: {
 
   lines.push(
     "---",
-    `${site.name} · ${site.serviceArea}`,
-    ...(site.email ? [`Questions? ${site.email}`] : []),
-    `Replies to this message are not read. To book or change a visit, use ${site.url}.`,
-    ...(site.postalAddress ? [site.postalAddress] : []),
+    ...(opts.internal
+      ? [site.name, "Automatic notification from your site."]
+      : [
+          `${site.name} · ${site.serviceArea}`,
+          ...(site.email ? [`Questions? ${site.email}`] : []),
+          `Replies to this message are not read. To book or change a visit, use ${site.url}.`,
+          ...(site.postalAddress ? [site.postalAddress] : []),
+        ]),
     ...(opts.unsubscribeUrl ? [`Stop these reminders: ${opts.unsubscribeUrl}`] : []),
   );
   return lines.join("\n");
