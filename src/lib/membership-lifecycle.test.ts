@@ -11,6 +11,7 @@ import {
 } from "./pricing";
 import {
   cancellationEndDate,
+  nextPeriod,
   periodContaining,
   periodsToGenerate,
   rateForPeriod,
@@ -27,6 +28,7 @@ function sub(overrides: Partial<SubscriptionRow> = {}): SubscriptionRow {
     monthly_amount_cents: 26900,
     visits_per_period: 2,
     pet_surcharge_cents: 0,
+    interval_days: null,
     preferred_weekday: 4, // Thursday
     preferred_weekday_second: null,
     started_on: "2026-01-15",
@@ -551,4 +553,76 @@ test("passwords too short or too obvious are rejected", () => {
   assert.ok(passwordProblem("aaaaaaaaaaaaaaaa"), "one repeated character");
   assert.ok(passwordProblem("homewick-cleaning-2026"), "contains the business name");
   assert.equal(passwordProblem("scatter marble tundra ledger"), null, "four words is fine");
+});
+
+/**
+ * A cadence that is not a month. Every three weeks was the case that prompted
+ * it, arriving from a lead platform rather than the booking form.
+ *
+ * The monthly path is deliberately untouched, so the last test here checks
+ * that a null interval still behaves exactly as it always did.
+ */
+function every3Weeks(overrides: Partial<SubscriptionRow> = {}): SubscriptionRow {
+  return sub({
+    started_on: "2026-03-02",
+    interval_days: 21,
+    visits_per_period: 1,
+    ...overrides,
+  });
+}
+
+test("custom interval: periods are exactly the interval long, from the start date", () => {
+  const p = periodContaining(every3Weeks(), "2026-03-02");
+  assert.equal(p.start, "2026-03-02");
+  assert.equal(p.end, "2026-03-23");
+});
+
+test("custom interval: walks forward in whole intervals, not months", () => {
+  // 2026-04-01 falls in the third period: Mar 2, Mar 23, Apr 13.
+  const p = periodContaining(every3Weeks(), "2026-04-01");
+  assert.equal(p.start, "2026-03-23");
+  assert.equal(p.end, "2026-04-13");
+});
+
+test("custom interval: ignores billing_day, which means nothing on this cadence", () => {
+  const a = periodContaining(every3Weeks({ billing_day: 1 }), "2026-04-01");
+  const b = periodContaining(every3Weeks({ billing_day: 28 }), "2026-04-01");
+  assert.deepEqual(a, b);
+});
+
+test("custom interval: periods chain with no gap and no overlap", () => {
+  const s = every3Weeks();
+  const first = periodContaining(s, "2026-03-02");
+  const second = nextPeriod(s, first);
+  assert.equal(second.start, first.end);
+  assert.equal(second.end, "2026-04-13");
+});
+
+test("custom interval: a generated run stays 21 days apart throughout", () => {
+  const periods = periodsToGenerate(every3Weeks(), "2026-03-02");
+  assert.ok(periods.length > 1, "expected more than one period");
+  for (let i = 1; i < periods.length; i++) {
+    assert.equal(periods[i].start, periods[i - 1].end);
+    assert.equal(daysBetween(periods[i].start, periods[i].end), 21);
+  }
+});
+
+test("custom interval: stops generating once a cancelled sub passes its end date", () => {
+  const periods = periodsToGenerate(
+    every3Weeks({ status: "pending_cancellation", ends_on: "2026-03-23" }),
+    "2026-03-02",
+  );
+  assert.ok(periods.every((p) => p.start < "2026-03-23"));
+});
+
+test("custom interval: refuses one short enough to stack visits on each other", () => {
+  assert.throws(() => periodContaining(every3Weeks({ interval_days: 3 }), "2026-03-02"));
+});
+
+test("custom interval: a null interval leaves the monthly path exactly as it was", () => {
+  const monthly = sub({ started_on: "2026-01-15", billing_day: 15, interval_days: null });
+  const p = periodContaining(monthly, "2026-02-01");
+  assert.equal(p.start, "2026-01-15");
+  assert.equal(p.end, "2026-02-15");
+  assert.equal(nextPeriod(monthly, p).end, "2026-03-15");
 });

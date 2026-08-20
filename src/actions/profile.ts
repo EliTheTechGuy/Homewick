@@ -200,11 +200,13 @@ export async function changeMembershipSize(newSize: unknown): Promise<Result> {
         preferred_weekday_second: number | null;
         started_on: ISODate;
         billing_day: number;
+        interval_days: number | null;
         stripe_subscription_id: string | null;
       }>(
         `select id, property_id, unit_size, monthly_amount_cents, visits_per_period,
                 pet_surcharge_cents, preferred_weekday, preferred_weekday_second,
-                started_on::text as started_on, billing_day, stripe_subscription_id
+                started_on::text as started_on, billing_day, interval_days,
+                stripe_subscription_id
            from subscriptions
           where customer_id = $1 and status <> 'canceled'
           order by created_at desc
@@ -222,27 +224,30 @@ export async function changeMembershipSize(newSize: unknown): Promise<Result> {
       }
 
       const newRate = MEMBERSHIP_PRICES[size.data].monthlyCents;
-      const effectiveOn = nextPeriod(
-        periodContaining(
-          {
-            id: sub.id,
-            customer_id: member.customerId,
-            property_id: sub.property_id,
-            status: "active",
-            monthly_amount_cents: sub.monthly_amount_cents,
-            visits_per_period: sub.visits_per_period,
-            pet_surcharge_cents: sub.pet_surcharge_cents,
-            preferred_weekday: sub.preferred_weekday,
-            preferred_weekday_second: sub.preferred_weekday_second,
-            started_on: sub.started_on,
-            billing_day: sub.billing_day,
-            pending_amount_cents: null,
-            pending_amount_effective_on: null,
-            ends_on: null,
-          },
-          today(),
-        ),
-      ).start;
+
+      // Built once and shared, so the period this change lands in and the
+      // period after it are measured against the same subscription. Passing
+      // interval_days through matters: a custom cadence has different
+      // boundaries, and a rate change must take effect on one of its
+      // boundaries rather than on a month that never occurs for them.
+      const row = {
+        id: sub.id,
+        customer_id: member.customerId,
+        property_id: sub.property_id,
+        status: "active" as const,
+        monthly_amount_cents: sub.monthly_amount_cents,
+        visits_per_period: sub.visits_per_period,
+        pet_surcharge_cents: sub.pet_surcharge_cents,
+        preferred_weekday: sub.preferred_weekday,
+        preferred_weekday_second: sub.preferred_weekday_second,
+        started_on: sub.started_on,
+        billing_day: sub.billing_day,
+        interval_days: sub.interval_days,
+        pending_amount_cents: null,
+        pending_amount_effective_on: null,
+        ends_on: null,
+      };
+      const effectiveOn = nextPeriod(row, periodContaining(row, today())).start;
 
       await client.query(
         `update subscriptions

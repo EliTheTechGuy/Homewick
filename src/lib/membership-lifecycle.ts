@@ -71,6 +71,8 @@ export type SubscriptionRow = {
   preferred_weekday_second: number | null;
   started_on: ISODate;
   billing_day: number;
+  /** Null is the ordinary monthly cycle. A value means every N days. */
+  interval_days: number | null;
   pending_amount_cents: number | null;
   pending_amount_effective_on: ISODate | null;
   ends_on: ISODate | null;
@@ -88,6 +90,22 @@ export type Period = {
  * there is, so the constraint is doing real work and this code relies on it.
  */
 export function periodContaining(sub: SubscriptionRow, date: ISODate): Period {
+  // A custom cadence is measured in whole days from the day service started,
+  // and ignores billing_day entirely. Anchoring makes no sense when the cycle
+  // is not a month: "the 12th of every 21 days" is not a thing.
+  if (sub.interval_days != null) {
+    if (sub.interval_days < 7) {
+      throw new Error(`interval_days must be at least 7, got ${sub.interval_days}`);
+    }
+    let start = sub.started_on;
+    let guard = 0;
+    while (true) {
+      const end = addDays(start, sub.interval_days);
+      if (isBefore(date, end) || guard++ > 600) return { start, end };
+      start = end;
+    }
+  }
+
   if (sub.billing_day < 1 || sub.billing_day > 28) {
     throw new Error(`billing_day must be between 1 and 28, got ${sub.billing_day}`);
   }
@@ -110,8 +128,18 @@ function anchorOnOrBefore(startedOn: ISODate, billingDay: number): ISODate {
   return isOnOrAfter(startedOn, thisMonth) ? thisMonth : addMonths(thisMonth, -1);
 }
 
-export function nextPeriod(period: Period): Period {
-  return { start: period.end, end: addMonths(period.end, 1) };
+/**
+ * Takes the subscription as well as the period, because the length of the next
+ * one depends on the cadence and a Period alone cannot say what that is.
+ */
+export function nextPeriod(sub: SubscriptionRow, period: Period): Period {
+  return {
+    start: period.end,
+    end:
+      sub.interval_days != null
+        ? addDays(period.end, sub.interval_days)
+        : addMonths(period.end, 1),
+  };
 }
 
 /**
@@ -134,7 +162,7 @@ export function periodsToGenerate(
     if (sub.ends_on && isOnOrAfter(period.start, sub.ends_on)) break;
     periods.push(period);
     if (!isBefore(period.start, horizon)) break;
-    period = nextPeriod(period);
+    period = nextPeriod(sub, period);
   }
 
   return periods;
@@ -377,7 +405,7 @@ export async function generateUpcomingVisits(
       `select id, customer_id, property_id, status, monthly_amount_cents,
               visits_per_period, pet_surcharge_cents, preferred_weekday,
               preferred_weekday_second,
-              started_on::text as started_on, billing_day,
+              started_on::text as started_on, billing_day, interval_days,
               pending_amount_cents, pending_amount_effective_on::text
                 as pending_amount_effective_on,
               ends_on::text as ends_on
@@ -458,7 +486,7 @@ export function cancellationEndDate(
 ): ISODate {
   const period = periodContaining(sub, requestedOn);
   const daysLeft = daysBetween(requestedOn, period.end);
-  return daysLeft >= CANCELLATION_NOTICE_DAYS ? period.end : nextPeriod(period).end;
+  return daysLeft >= CANCELLATION_NOTICE_DAYS ? period.end : nextPeriod(sub, period).end;
 }
 
 export async function requestCancellation(
@@ -470,7 +498,7 @@ export async function requestCancellation(
     `select id, customer_id, property_id, status, monthly_amount_cents,
             visits_per_period, pet_surcharge_cents, preferred_weekday,
             preferred_weekday_second,
-            started_on::text as started_on, billing_day,
+            started_on::text as started_on, billing_day, interval_days,
             pending_amount_cents, pending_amount_effective_on::text
               as pending_amount_effective_on,
             ends_on::text as ends_on

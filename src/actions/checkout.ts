@@ -104,9 +104,13 @@ async function firstMonthCoupon(): Promise<string> {
 
 async function membershipSession(subscriptionId: string) {
   const row = await queryOne<
-    CustomerRow & { unit_size: UnitSize; monthly_amount_cents: number }
+    CustomerRow & {
+      unit_size: UnitSize;
+      monthly_amount_cents: number;
+      interval_days: number | null;
+    }
   >(
-    `select s.customer_id, s.unit_size, s.monthly_amount_cents,
+    `select s.customer_id, s.unit_size, s.monthly_amount_cents, s.interval_days,
             c.email, c.stripe_customer_id
        from subscriptions s
        join customers c on c.id = s.customer_id
@@ -145,7 +149,13 @@ async function membershipSession(subscriptionId: string) {
       price_data: {
         currency: "usd",
         unit_amount: row.monthly_amount_cents,
-        recurring: { interval: "month" },
+        // A custom cadence bills on the same clock the visits run on, so the
+        // billing period and the entitlement period stay the same thing.
+        // Verified against the API that Stripe accepts a 21 day interval.
+        recurring:
+          row.interval_days != null
+            ? { interval: "day" as const, interval_count: row.interval_days }
+            : { interval: "month" as const },
         product: productId,
       },
     },
@@ -180,7 +190,12 @@ async function membershipSession(subscriptionId: string) {
     // once-duration coupon is how Stripe expresses that, and it keeps the
     // recurring price honest, the subscription really is $269/month, so a
     // rate change later does not have to unpick a bespoke first invoice.
-    discounts: [{ coupon: await firstMonthCoupon() }],
+    // Only on the published monthly membership. A custom cadence is a price
+    // agreed by hand, and taking a further 15% off it would undercut the deal
+    // that was actually struck rather than welcome anybody.
+    ...(row.interval_days == null
+      ? { discounts: [{ coupon: await firstMonthCoupon() }] }
+      : {}),
     customer: row.stripe_customer_id ?? undefined,
     customer_email: row.stripe_customer_id ? undefined : row.email,
     success_url: `${site.url}/book/confirmed/paid?ref=${subscriptionId}&session_id={CHECKOUT_SESSION_ID}`,
