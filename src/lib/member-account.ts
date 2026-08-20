@@ -25,6 +25,12 @@ export type MemberOverview = {
     status: string;
     monthlyAmountCents: number;
     unitSize: UnitSize;
+    /**
+     * Null is the published monthly membership. A value means a cadence
+     * arranged by hand, which changes what the amount above actually means:
+     * it is charged every this-many days, not every month.
+     */
+    intervalDays: number | null;
     endsOn: string | null;
     /**
      * What the end date would be if they cancelled today. Shown before they
@@ -212,6 +218,8 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
         ? sub.pending_amount_cents!
         : sub.monthly_amount_cents,
       unitSize: sub.unit_size,
+      /** Null is the ordinary monthly membership. A value is a custom cadence. */
+      intervalDays: sub.interval_days,
       endsOn: sub.ends_on,
       wouldEndOn: cancellationEndDate({
         id: sub.id,

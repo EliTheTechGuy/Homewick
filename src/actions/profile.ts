@@ -223,6 +223,21 @@ export async function changeMembershipSize(newSize: unknown): Promise<Result> {
         return { ok: false as const, message: "That is already your membership." };
       }
 
+      // A custom cadence was priced by hand and has no published rate to move
+      // to. Without this a house on an agreed $145 could set itself to the
+      // 3 bed apartment rate by clicking a radio button, and the first anybody
+      // would know is the invoice.
+      //
+      // Enforced here as well as hidden in the UI, because a hidden button is
+      // not a guard: this is a server action and can be called directly.
+      if (sub.interval_days != null) {
+        return {
+          ok: false as const,
+          message:
+            "Your schedule was arranged with us directly, so it is not on the published sizes. Get in touch and we will sort it.",
+        };
+      }
+
       const newRate = MEMBERSHIP_PRICES[size.data].monthlyCents;
 
       // Built once and shared, so the period this change lands in and the
