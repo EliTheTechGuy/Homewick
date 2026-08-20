@@ -24,7 +24,7 @@ const steps = [
   },
   {
     n: "03",
-    title: "You come home to a clean apartment",
+    title: "You come home to a clean place",
     body: "Paid online when you book, so there is nothing to arrange and nothing to negotiate at the door. Book again whenever you like, or put it on a membership so you never have to.",
   },
 ];
@@ -48,12 +48,12 @@ export default function HomePage() {
               {site.serviceArea}
             </p>
             <h1 className="mt-4 text-4xl font-semibold leading-[1.1] text-navy md:text-6xl">
-              A clean apartment, without the back and forth.
+              A clean home, without the back and forth.
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted">
-              Standard cleans, deep cleans, and move in and out. Priced up front and
-              booked online in a couple of minutes. Book one when you need it, or join
-              the membership and stop thinking about it.
+              Apartments and houses across the metroplex. Standard cleans, deep cleans,
+              and move in and out. Book an apartment online in a couple of minutes at a
+              published rate, or tell us about your house and we will quote it.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
               <ButtonLink href="/book">Book online</ButtonLink>
@@ -124,8 +124,8 @@ export default function HomePage() {
       <Section>
         <SectionHeading
           eyebrow="What we do"
-          title="Three cleans, priced up front."
-          lead="Book any of them as a single visit. Nothing here needs a membership."
+          title="Three cleans, whichever kind of home."
+          lead="Apartment rates are published, so you can book and pay online. Houses are quoted by square footage, because a range wide enough to be safe would tell you nothing."
         />
         <div className="mt-12 grid gap-6 md:grid-cols-3">
           {SERVICE_TYPES.map((service) => {
@@ -147,9 +147,9 @@ export default function HomePage() {
           })}
         </div>
         <div className="mt-10 flex flex-wrap gap-3">
-          <ButtonLink href="/book">Book a clean</ButtonLink>
-          <ButtonLink href="/pricing" variant="secondary">
-            See every price
+          <ButtonLink href="/book">Book an apartment clean</ButtonLink>
+          <ButtonLink href="/services/residential" variant="secondary">
+            Get a house quote
           </ButtonLink>
         </div>
       </Section>
@@ -191,7 +191,7 @@ export default function HomePage() {
           <SectionHeading
             eyebrow="Our standards"
             title="The product is reliability."
-            lead="We specialize in apartments, which means we are not learning your floor plan on the job. What you are paying for is that the result is the same every time."
+            lead="Apartments are our specialism, which means we are not learning your floor plan on the job, and houses get the same crew and the same checklist. What you are paying for is that the result is the same every time."
           />
           <ul className="space-y-4">
             {standards.map((s) => (
@@ -219,7 +219,7 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 px-5 py-14 md:flex-row md:items-center">
           <div>
             <h2 className="text-2xl font-semibold text-white md:text-3xl">
-              Spotless apartments for easier living
+              Spotless homes for easier living
             </h2>
             <p className="mt-2 text-white/80">
               One clean or every month, whichever suits. Booking takes a couple of

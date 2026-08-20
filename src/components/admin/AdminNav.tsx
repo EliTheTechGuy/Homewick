@@ -15,6 +15,7 @@ const TABS = [
   { key: "day", href: "/admin", label: "Schedule" },
   { key: "new", href: "/admin/new", label: "New booking" },
   { key: "members", href: "/admin/members", label: "Members" },
+  { key: "enquiries", href: "/admin/enquiries", label: "Quotes" },
   { key: "cleaners", href: "/admin/cleaners", label: "Cleaners" },
   { key: "pay", href: "/admin/pay", label: "Pay" },
   { key: "feedback", href: "/admin/feedback", label: "Feedback" },
