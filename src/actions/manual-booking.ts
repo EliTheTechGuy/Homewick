@@ -45,7 +45,13 @@ const schema = z.object({
   line2: z.string().trim().max(200).optional(),
   city: z.string().trim().min(1, "City is required").max(120),
   postalCode: z.string().trim().min(5, "ZIP is required").max(12),
+  /** Decides which pay model the crew on this job is paid under. */
+  propertyKind: z.enum(["apartment", "house"]),
   unitSize: z.enum(UNIT_SIZES.map((u) => u.id) as [UnitSize, ...UnitSize[]]),
+  /** Houses only. An apartment's size is its unitSize. */
+  bedrooms: z.number().int().min(0).max(20).optional(),
+  bathrooms: z.number().min(0).max(20).optional(),
+  squareFeet: z.number().int().min(100).max(30000).optional(),
   hasPets: z.boolean(),
 
   entryMethod: z.enum(["gate_code", "door_code", "key_location", "none"]),

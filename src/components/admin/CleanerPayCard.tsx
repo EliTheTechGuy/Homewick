@@ -9,6 +9,7 @@ type Visit = {
   serviceType: string;
   visitTotalCents: number;
   payCents: number | null;
+  isLead: boolean;
 };
 
 function money(cents: number): string {
@@ -121,7 +122,14 @@ export function CleanerPayCard({
               {visits.map((v) => (
                 <tr key={v.id} className="border-t border-hairline">
                   <td className="py-2 text-body">{v.onDate}</td>
-                  <td className="py-2 text-body">{v.serviceType}</td>
+                  <td className="py-2 text-body">
+                    {v.serviceType}
+                    {v.isLead && (
+                      <span className="ml-2 rounded-full bg-panel px-2 py-0.5 text-xs font-medium text-muted">
+                        lead
+                      </span>
+                    )}
+                  </td>
                   <td className="py-2 text-right text-muted">{money(v.visitTotalCents)}</td>
                   <td className="py-2 text-right font-medium text-navy">
                     {v.payCents === null ? (
