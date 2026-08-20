@@ -29,18 +29,18 @@ const covered = [
   "Trash out, liners replaced",
 ];
 
-const whyQuoted = [
+const pricedOn = [
   {
     title: "Square footage",
-    body: "The single biggest factor, and the one an apartment matrix cannot express. A 1,400 square foot house and a 3,200 square foot house are not the same job.",
+    body: "The biggest factor. A 1,400 square foot house and a 3,200 square foot house are not the same job, and the price should say so.",
   },
   {
     title: "Layout and floors",
-    body: "Stairs, split levels, and long runs of hard floor all add time. So does a house with five bathrooms and one with two.",
+    body: "Stairs, split levels, and long runs of hard floor all add time, and so does five bathrooms against two.",
   },
   {
-    title: "What condition it starts in",
-    body: "A house cleaned every three weeks is a different job from one that has not been done in a year. We would rather see it than guess.",
+    title: "How it has been kept",
+    body: "A house cleaned every few weeks is a different job from one that has not been done in a year. We would rather ask than guess.",
   },
 ];
 
@@ -72,12 +72,12 @@ export default function ResidentialPage() {
 
       <Section tinted>
         <SectionHeading
-          eyebrow="Why we quote rather than publish"
-          title="Because a house is not a size on a list."
-          lead="Our apartment rates are published because apartments are consistent enough to price honestly in advance. Houses are not, and a range wide enough to be safe would tell you nothing."
+          eyebrow="How we price it"
+          title="Three things set the number."
+          lead="Tell us about them and you get a real price rather than a range. No walkthrough needed, and nothing changes once we arrive."
         />
         <div className="mt-10 grid gap-6 md:grid-cols-3">
-          {whyQuoted.map((r) => (
+          {pricedOn.map((r) => (
             <Card key={r.title}>
               <h3 className="text-lg font-semibold text-navy">{r.title}</h3>
               <p className="mt-2 leading-relaxed text-muted">{r.body}</p>
@@ -90,7 +90,7 @@ export default function ResidentialPage() {
         <div className="grid gap-12 md:grid-cols-2">
           <SectionHeading
             eyebrow="What a clean covers"
-            title="The same standard as everything else we do."
+            title="Every room, every time."
             lead="Deep cleans add baseboards, buildup, and detail work on top. Move in and out is aimed at the condition an inspection is held against."
           />
           <ul className="space-y-3">
