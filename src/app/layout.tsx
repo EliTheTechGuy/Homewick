@@ -5,16 +5,16 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
   title: {
-    default: "Homewick Cleaning. Apartment cleaning in Dallas-Fort Worth",
+    default: "Homewick Cleaning. Home and apartment cleaning in Dallas-Fort Worth",
     template: "%s | Homewick Cleaning",
   },
   description:
-    "Membership apartment cleaning in the Dallas-Fort Worth metroplex. Two cleanings a month, one flat charge, the same cleaner whenever scheduling allows.",
+    "House and apartment cleaning in the Dallas-Fort Worth metroplex. Flat published rates for apartments, houses quoted by square footage, and a membership if you want it handled every month.",
   alternates: { canonical: "/" },
   openGraph: {
     title: "Homewick Cleaning",
     description:
-      "Membership apartment cleaning in the Dallas-Fort Worth metroplex. Two cleanings a month, one flat charge.",
+      "House and apartment cleaning in the Dallas-Fort Worth metroplex. Flat rates for apartments, houses quoted.",
     url: site.url,
     siteName: site.name,
     locale: "en_US",
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Homewick Cleaning",
     description:
-      "Membership apartment cleaning in the Dallas-Fort Worth metroplex. Two cleanings a month, one flat charge.",
+      "House and apartment cleaning in the Dallas-Fort Worth metroplex. Flat rates for apartments, houses quoted.",
   },
 };
 

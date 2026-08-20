@@ -29,7 +29,7 @@ export function StructuredData() {
     legalName: site.legalEntity,
     url: site.url,
     description:
-      "Apartment cleaning in the Dallas-Fort Worth metroplex. Standard, deep, and move in and out cleans, or a membership covering two cleanings a month for one flat charge.",
+      "House and apartment cleaning in the Dallas-Fort Worth metroplex. Standard, deep, and move in and out cleans. Apartments at flat published rates, houses quoted by square footage, with a membership option covering two cleanings a month.",
     ...(site.email ? { email: site.email } : {}),
     ...(site.phone ? { telephone: site.phone } : {}),
     priceRange: "$$",
@@ -46,7 +46,7 @@ export function StructuredData() {
       addressCountry: "US",
     },
     // Cleaners travel to the customer; there is no shop to visit.
-    serviceType: "Apartment cleaning",
+    serviceType: ["House cleaning", "Apartment cleaning"],
     hasOfferCatalog: {
       "@type": "OfferCatalog",
       name: "Cleaning services",
