@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { ButtonLink, Card, CheckIcon, Section, SectionHeading } from "@/components/ui";
-import { AddOnList } from "@/components/AddOnList";
-import { PricingTable } from "@/components/PricingTable";
 import { SERVICE_TYPES } from "@/lib/pricing";
 
 export const metadata: Metadata = {
@@ -116,17 +114,28 @@ export default function ServicesPage() {
         </div>
       </Section>
 
-      <Section>
-        <SectionHeading eyebrow="Pricing" title="One-time service." />
-        <PricingTable className="mt-10" />
-      </Section>
-
+      {/* The full price matrix and the add-on list both used to be repeated
+          here, which meant three pages answered "what does it cost" and none
+          of them was obviously the place to look. This page says what you get.
+          Pricing says what it costs, and is the only page that puts the
+          one-time and membership rates side by side, which is where the
+          comparison actually happens. */}
       <Section tinted>
-        <SectionHeading eyebrow="Add-ons" title="Anything extra." />
-        <AddOnList className="mt-10" />
-        <div className="mt-10">
-          <ButtonLink href="/book">Book online</ButtonLink>
-        </div>
+        <Card className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
+          <div>
+            <h2 className="text-xl font-semibold text-navy">What it costs</h2>
+            <p className="mt-2 max-w-xl text-muted">
+              Every rate is published by apartment size, for one-time cleans and for
+              membership, alongside the add-ons you can put on any visit.
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-3">
+            <ButtonLink href="/pricing">See pricing</ButtonLink>
+            <ButtonLink href="/book" variant="secondary">
+              Book online
+            </ButtonLink>
+          </div>
+        </Card>
       </Section>
     </>
   );
