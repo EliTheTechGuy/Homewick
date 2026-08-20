@@ -242,6 +242,9 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
           status: "pending_payment",
           monthly_amount_cents: MEMBERSHIP_PRICES[input.unitSize].monthlyCents,
           visits_per_period: VISITS_PER_PERIOD,
+          // Public bookings are always the monthly membership. Custom
+          // cadences are entered in admin.
+          interval_days: null,
           pet_surcharge_cents: 0,
           preferred_weekday: input.preferredWeekday ?? null,
           preferred_weekday_second: null,

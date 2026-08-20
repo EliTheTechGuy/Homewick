@@ -75,6 +75,7 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
     ends_on: string | null;
     started_on: string;
     billing_day: number;
+    interval_days: number | null;
     visits_per_period: number;
     pet_surcharge_cents: number;
     preferred_weekday: number | null;
@@ -92,7 +93,7 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
   }>(
     `select s.id, s.status::text as status, s.monthly_amount_cents, s.unit_size,
             s.ends_on::text as ends_on, s.started_on::text as started_on,
-            s.billing_day, s.visits_per_period, s.pet_surcharge_cents,
+            s.billing_day, s.interval_days, s.visits_per_period, s.pet_surcharge_cents,
             s.preferred_weekday, c.stripe_customer_id,
             s.pending_amount_cents,
             s.pending_amount_effective_on::text as pending_amount_effective_on,
@@ -217,6 +218,7 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
         customer_id: customerId,
         property_id: "",
         status: "active",
+        interval_days: sub.interval_days,
         monthly_amount_cents: sub.monthly_amount_cents,
         visits_per_period: sub.visits_per_period,
         pet_surcharge_cents: sub.pet_surcharge_cents,
