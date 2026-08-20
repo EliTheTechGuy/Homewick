@@ -125,9 +125,13 @@ export async function submitEnquiry(form: FormData): Promise<EnquiryResult> {
     });
   }
 
+  // Warmer than "request sent". Somebody handing over their address and
+  // asking a stranger into their home is making a small leap of trust, and a
+  // receipt-shaped acknowledgement does not meet that. The spam line stays
+  // because it is the one genuinely useful instruction here.
   return {
     ok: true,
     message:
-      "Got it. We will come back to you with a price, usually the same day. Check your spam folder if you do not hear from us.",
+      "We will look at what you have sent and come back with a price, usually the same day. It is a real person reading it, not an automated quote, so it might take a little longer if we are out on a job. Do have a look in your spam folder if you have not heard from us by tomorrow.",
   };
 }
