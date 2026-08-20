@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { changeMembershipSize, updateAddress } from "@/actions/profile";
+import { cadenceLabel } from "@/lib/cadence";
 import { formatLong } from "@/lib/dates";
 import { formatCents } from "@/lib/money";
 import { MEMBERSHIP_PRICES, UNIT_SIZES, unitSizeLabel, type UnitSize } from "@/lib/pricing";
@@ -67,11 +68,30 @@ export function ProfileSection({ overview }: { overview: MemberOverview }) {
       )}
 
       <div className="mt-6 border-t border-hairline pt-6">
-        <SizeChooser
-          current={subscription.unitSize}
-          currentRateCents={subscription.monthlyAmountCents}
-          pendingRate={pendingRate}
-        />
+        {subscription.intervalDays == null ? (
+          <SizeChooser
+            current={subscription.unitSize}
+            currentRateCents={subscription.monthlyAmountCents}
+            pendingRate={pendingRate}
+          />
+        ) : (
+          /* Replaced rather than adapted. There is no published price list for
+             a schedule agreed by hand, so showing the apartment sizes would
+             offer this customer rates that have nothing to do with their
+             arrangement, and let them set one by accident. */
+          <div>
+            <p className="text-sm font-medium text-muted">Your schedule</p>
+            <p className="mt-1 text-body">
+              {formatCents(subscription.monthlyAmountCents)}{" "}
+              {cadenceLabel(subscription.intervalDays)}
+            </p>
+            <p className="mt-4 text-sm leading-relaxed text-muted">
+              This was arranged with us directly rather than from the published
+              rates, so it is not something to change from here. Get in touch and we
+              will sort it.
+            </p>
+          </div>
+        )}
       </div>
     </Card>
   );
