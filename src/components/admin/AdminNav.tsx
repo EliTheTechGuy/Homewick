@@ -13,6 +13,7 @@ import { AdminSignOut } from "./AdminSignOut";
  */
 const TABS = [
   { key: "day", href: "/admin", label: "Schedule" },
+  { key: "metrics", href: "/admin/metrics", label: "Metrics" },
   { key: "new", href: "/admin/new", label: "New booking" },
   { key: "members", href: "/admin/members", label: "Members" },
   { key: "enquiries", href: "/admin/enquiries", label: "Quotes" },
