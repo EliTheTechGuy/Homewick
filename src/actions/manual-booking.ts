@@ -108,8 +108,9 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
 
       const { rows: propertyRows } = await client.query<{ id: string }>(
         `insert into properties
-           (customer_id, line1, line2, city, state, postal_code, unit_size, has_pets)
-         values ($1, $2, $3, $4, 'TX', $5, $6, $7)
+           (customer_id, line1, line2, city, state, postal_code, unit_size,
+            has_pets, property_kind, bedrooms, bathrooms, square_feet)
+         values ($1, $2, $3, $4, 'TX', $5, $6, $7, $8, $9, $10, $11)
          returning id`,
         [
           customerId,
@@ -117,8 +118,18 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
           input.line2 || null,
           input.city,
           input.postalCode,
+          // unit_size is not null in the schema and describes an apartment. A
+          // house still needs a value, so it takes the nearest bracket, and
+          // the real shape lives in bedrooms, bathrooms and square feet.
           input.unitSize,
           input.hasPets,
+          // Decides which pay model every crew on this property is paid under,
+          // so losing it is not cosmetic: a house would quietly pay its crew
+          // on the apartment model.
+          input.propertyKind,
+          input.propertyKind === "house" ? (input.bedrooms ?? null) : null,
+          input.propertyKind === "house" ? (input.bathrooms ?? null) : null,
+          input.propertyKind === "house" ? (input.squareFeet ?? null) : null,
         ],
       );
       const propertyId = propertyRows[0].id;
