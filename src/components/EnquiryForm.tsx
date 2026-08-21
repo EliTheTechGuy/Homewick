@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { submitEnquiry } from "@/actions/enquiry";
 
 const field =
@@ -25,6 +25,19 @@ export function EnquiryForm() {
   const [done, setDone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const errorRef = useRef<HTMLParagraphElement>(null);
+
+  /**
+   * Scrolling moves the page but leaves the cursor where it was, so somebody
+   * on a screen reader was told nothing. Deferred a frame because the banner
+   * does not exist until the state that renders it has committed.
+   */
+  function focusError() {
+    requestAnimationFrame(() => {
+      errorRef.current?.focus();
+      errorRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  }
 
   if (done) {
     return (
@@ -40,12 +53,37 @@ export function EnquiryForm() {
       action={(data) =>
         startTransition(async () => {
           const res = await submitEnquiry(data);
-          if (res.ok) setDone(res.message);
-          else setError(res.message);
+          if (res.ok) {
+            setDone(res.message);
+          } else {
+            setError(res.message);
+            focusError();
+          }
         })
       }
+      /* Native validation blocks the submit and jumps to the first empty
+         field, showing a bubble that vanishes. Somebody who has just typed
+         out their address deserves to be told what is wrong, not watch the
+         page move for no stated reason. */
+      onInvalid={() => {
+        setError(
+          "Something is still missing. The first one is highlighted below, and nothing has been sent yet.",
+        );
+        focusError();
+      }}
       className="space-y-5"
     >
+      {error && (
+        <p
+          ref={errorRef}
+          role="alert"
+          tabIndex={-1}
+          className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 outline-none"
+        >
+          {error}
+        </p>
+      )}
+
       <div className="grid gap-5 sm:grid-cols-2">
         <Label label="Your full name">
           <input name="name" required className={field} />
@@ -94,11 +132,6 @@ export function EnquiryForm() {
         <textarea name="message" rows={4} className={field} />
       </Label>
 
-      {error && (
-        <p role="alert" className="text-sm text-red-700">
-          {error}
-        </p>
-      )}
 
       <button
         type="submit"

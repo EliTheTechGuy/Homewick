@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { createManualBooking } from "@/actions/manual-booking";
 import { SERVICE_TYPES, UNIT_SIZES } from "@/lib/pricing";
 
@@ -40,9 +40,27 @@ export function ManualBookingForm() {
     message: string;
     url?: string;
   } | null>(null);
+  const [missing, setMissing] = useState(false);
   const [pending, startTransition] = useTransition();
+  const bannerRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Take the reader to the answer, not just to the top of the page.
+   *
+   * Deferred a frame because the banner does not exist until the state that
+   * renders it has committed. Focus as well as scroll, since scrolling moves
+   * the viewport but leaves the cursor where it was, which tells somebody on a
+   * screen reader nothing at all.
+   */
+  function showBanner() {
+    requestAnimationFrame(() => {
+      bannerRef.current?.focus();
+      bannerRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  }
 
   function submit(data: FormData) {
+    setMissing(false);
     startTransition(async () => {
       const dollars = Number(data.get("amount"));
       const res = await createManualBooking({
@@ -78,11 +96,65 @@ export function ManualBookingForm() {
         message: res.message,
         url: res.ok ? res.checkoutUrl : undefined,
       });
+      showBanner();
     });
   }
 
   return (
-    <form action={submit} className="mt-8 space-y-8">
+    <form
+      action={submit}
+      /* Native validation blocks the submit and jumps to the first empty
+         field, showing a bubble that disappears the moment you look away. So
+         the page moved and nothing explained why. This fires for each invalid
+         field; the flag is enough, the browser still highlights which one. */
+      onInvalid={() => {
+        setResult(null);
+        setMissing(true);
+      }}
+      className="mt-8 space-y-8"
+    >
+      {/* At the top, because the button is at the bottom of a long form and an
+          answer rendered underneath it is an answer nobody scrolls back to. */}
+      {(missing || result) && (
+        <div
+          ref={bannerRef}
+          tabIndex={-1}
+          role={result && !result.ok ? "alert" : "status"}
+          className={
+            missing || (result && !result.ok)
+              ? "rounded-2xl border border-red-200 bg-red-50 p-5 outline-none"
+              : "rounded-2xl border border-hairline bg-panel p-5 outline-none"
+          }
+        >
+          {missing ? (
+            <p className="text-red-800">
+              Some details are still missing. The first one is highlighted below,
+              and nothing has been saved yet.
+            </p>
+          ) : (
+            <>
+              <p className={result!.ok ? "text-body" : "text-red-800"}>
+                {result!.message}
+              </p>
+              {result!.url && (
+                <>
+                  <p className="mt-4 text-xs uppercase tracking-widest text-muted">
+                    Send them this
+                  </p>
+                  <p className="mt-1 break-all font-mono text-sm text-navy">
+                    {result!.url}
+                  </p>
+                  <p className="mt-3 text-sm text-muted">
+                    Nothing is scheduled until they pay. The link takes their card and
+                    the booking activates on its own.
+                  </p>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       <section>
         <h2 className="text-lg font-semibold text-navy">Customer</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -315,30 +387,6 @@ export function ManualBookingForm() {
         </button>
       </div>
 
-      {result && (
-        <div
-          role="status"
-          className={
-            result.ok
-              ? "rounded-2xl border border-hairline bg-panel p-5"
-              : "rounded-2xl border border-red-200 bg-red-50 p-5"
-          }
-        >
-          <p className={result.ok ? "text-body" : "text-red-800"}>{result.message}</p>
-          {result.url && (
-            <>
-              <p className="mt-4 text-xs uppercase tracking-widest text-muted">
-                Send them this
-              </p>
-              <p className="mt-1 break-all font-mono text-sm text-navy">{result.url}</p>
-              <p className="mt-3 text-sm text-muted">
-                Nothing is scheduled until they pay. The link takes their card and the
-                booking activates on its own.
-              </p>
-            </>
-          )}
-        </div>
-      )}
     </form>
   );
 }
