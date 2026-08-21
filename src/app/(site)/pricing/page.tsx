@@ -58,14 +58,18 @@ export default function PricingPage() {
       <Section>
         <Card className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
           <div>
-            <h2 className="text-xl font-semibold text-navy">Not an apartment?</h2>
+            <h2 className="text-xl font-semibold text-navy">Cleaning a house?</h2>
             <p className="mt-2 max-w-xl text-muted">
-              Single-family homes are quoted separately by square footage rather than
-              bedroom count. Get in touch through the booking form and we will price it.
+              Houses are quoted by square footage rather than bedroom count, so they do
+              not appear on the rates above. Tell us about the place and we come back
+              with a real number, usually the same day.
             </p>
           </div>
-          <ButtonLink href="/book" className="shrink-0">
-            Book online
+          {/* The booking form only offers apartment sizes, so sending a house
+              there was a dead end: somebody following the instruction arrived
+              at a form with no option that fitted them. */}
+          <ButtonLink href="/services/residential" className="shrink-0">
+            Get a quote
           </ButtonLink>
         </Card>
       </Section>
