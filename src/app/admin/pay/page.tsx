@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AdminNav } from "@/components/admin/AdminNav";
 import { query } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin-auth";
 import { TIMEZONE } from "@/lib/dates";
@@ -81,8 +80,7 @@ export default async function CleanerPayPage() {
   const unpriced = rows.filter((r) => r.visit_id && r.pay_cents === null).length;
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-10">
-      <AdminNav current="pay" />
+    <div className="mx-auto max-w-6xl px-5 py-10">
       <h1 className="mt-6 text-3xl font-semibold text-navy">Cleaner pay</h1>
       <p className="mt-3 max-w-2xl leading-relaxed text-muted">
         Completed visits that have not been paid for yet. Pay by bank transfer,

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { AdminNav } from "@/components/admin/AdminNav";
 import { ManualBookingForm } from "@/components/admin/ManualBookingForm";
 import { requireAdmin } from "@/lib/admin-auth";
 
@@ -24,8 +23,7 @@ export default async function NewBookingPage() {
   if (!admin) return null;
 
   return (
-    <div className="mx-auto max-w-4xl px-5 py-10">
-      <AdminNav current="new" />
+    <div className="mx-auto max-w-6xl px-5 py-10">
       <h1 className="mt-6 text-3xl font-semibold text-navy">New booking</h1>
       <p className="mt-3 max-w-2xl leading-relaxed text-muted">
         For somebody who called, was referred, or came from a listing site. Any

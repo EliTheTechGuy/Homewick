@@ -3,7 +3,6 @@ import { query } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-page";
 import { isDatabaseConfigured } from "@/lib/db";
 import { CleanerRoster } from "@/components/admin/CleanerRoster";
-import { AdminNav } from "@/components/admin/AdminNav";
 
 export const dynamic = "force-dynamic";
 
@@ -44,8 +43,7 @@ export default async function CleanersPage() {
   );
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-10">
-      <AdminNav current="cleaners" />
+    <div className="mx-auto max-w-6xl px-5 py-10">
       <h1 className="mt-6 text-3xl font-semibold text-navy">Cleaners</h1>
       <p className="mt-2 max-w-2xl leading-relaxed text-muted">
         Everyone who can be put on a job. Assigning somebody emails them the

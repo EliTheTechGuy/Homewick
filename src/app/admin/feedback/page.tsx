@@ -3,7 +3,6 @@ import Link from "next/link";
 import { query } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-page";
 import { TIMEZONE, formatLong } from "@/lib/dates";
-import { AdminNav } from "@/components/admin/AdminNav";
 import { RecoveryActions } from "@/components/admin/RecoveryActions";
 
 export const dynamic = "force-dynamic";
@@ -98,8 +97,7 @@ export default async function FeedbackPage({
   const c = counts[0] ?? { needed: 0, in_progress: 0, unanswered: 0 };
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-10">
-      <AdminNav current="feedback" />
+    <div className="mx-auto max-w-6xl px-5 py-10">
 
       <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
         <div>

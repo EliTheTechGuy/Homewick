@@ -5,7 +5,6 @@ import { guardAdminPage } from "@/lib/admin-page";
 import { TIMEZONE, formatLong } from "@/lib/dates";
 import { formatCents } from "@/lib/money";
 import { unitSizeLabel, type UnitSize } from "@/lib/pricing";
-import { AdminNav } from "@/components/admin/AdminNav";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -83,7 +82,6 @@ export default async function MembersPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-10">
-      <AdminNav current="members" />
 
       <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
         <div>
