@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AdminNav } from "@/components/admin/AdminNav";
 import { Card } from "@/components/ui";
 import { query } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin-auth";
@@ -51,8 +50,7 @@ export default async function EnquiriesPage() {
   const open = rows.filter((r) => r.status === "new" || r.status === "quoted").length;
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-10">
-      <AdminNav current="enquiries" />
+    <div className="mx-auto max-w-6xl px-5 py-10">
       <h1 className="mt-6 text-3xl font-semibold text-navy">Quote requests</h1>
       <p className="mt-3 max-w-2xl leading-relaxed text-muted">
         Houses cannot be priced from the published rates, so these come in as requests.

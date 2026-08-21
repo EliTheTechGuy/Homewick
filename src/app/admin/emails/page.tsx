@@ -3,7 +3,6 @@ import Link from "next/link";
 import { query } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-page";
 import { TIMEZONE } from "@/lib/dates";
-import { AdminNav } from "@/components/admin/AdminNav";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -98,8 +97,7 @@ export default async function EmailsPage({
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-10">
-      <AdminNav current="emails" />
+    <div className="mx-auto max-w-6xl px-5 py-10">
 
       <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
         <div>

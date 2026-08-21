@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AdminNav } from "@/components/admin/AdminNav";
 import { requireAdmin } from "@/lib/admin-auth";
 import { loadMetrics, revenueByMonth } from "@/lib/metrics";
 
@@ -90,8 +89,7 @@ export default async function MetricsPage() {
   const peak = Math.max(1, ...months.map((x) => x.cents));
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-10">
-      <AdminNav current="metrics" />
+    <div className="mx-auto max-w-6xl px-5 py-10">
       <h1 className="mt-6 text-3xl font-semibold text-navy">Metrics</h1>
       <p className="mt-3 max-w-2xl leading-relaxed text-muted">
         Completed work only. Anything still waiting to be paid for is not counted

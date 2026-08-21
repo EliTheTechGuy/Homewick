@@ -8,7 +8,6 @@ import { RevealAccess } from "@/components/RevealAccess";
 import { MarkComplete } from "@/components/MarkComplete";
 import { MarkSkipped } from "@/components/MarkSkipped";
 import { AssignCleaner, type CleanerOption } from "@/components/admin/AssignCleaner";
-import { AdminNav } from "@/components/admin/AdminNav";
 import { MonthCalendar, type DayCount } from "@/components/admin/MonthCalendar";
 import { UpcomingRail, type UpcomingRow } from "@/components/admin/UpcomingRail";
 import { addDays, addMonths, isISODate } from "@/lib/dates";
@@ -130,8 +129,7 @@ export default async function AdminTodayPage({
   );
 
   return (
-    <div className="mx-auto max-w-[1400px] px-5 py-10">
-      <AdminNav current="day" />
+    <div className="mx-auto max-w-6xl px-5 py-10">
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_300px]">
         {/* Calendar. Sticky on wide screens so it stays put while a long day scrolls. */}
