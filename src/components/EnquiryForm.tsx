@@ -63,15 +63,15 @@ export function EnquiryForm() {
       }
       /* Native validation blocks the submit and jumps to the first empty
          field, showing a bubble that vanishes. Somebody who has just typed
-         out their address deserves to be told what is wrong, not watch the
-         page move for no stated reason. */
+         out their address deserves to be told what is wrong. */
       onInvalid={() => {
-        setError(
-          "Something is still missing. The first one is highlighted below, and nothing has been sent yet.",
-        );
+        setError("Something is still missing.");
         focusError();
       }}
-      className="space-y-5"
+      /* And the offending fields go red, the way they do everywhere else.
+         :user-invalid only matches after somebody has interacted, so nothing
+         is red before it has been earned. */
+      className="space-y-5 [&_:user-invalid]:border-red-500 [&_:user-invalid]:bg-red-50"
     >
       {error && (
         <p
