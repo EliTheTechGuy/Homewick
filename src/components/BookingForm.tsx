@@ -221,6 +221,17 @@ export function BookingForm({
       // of appending them to the URL.
       method="post"
       className="mt-12 grid gap-12 lg:grid-cols-[1fr_20rem]"
+    
+      /* Native validation blocks the submit and jumps to the first empty
+         field, showing a bubble that disappears the moment somebody looks
+         away. The page moved and nothing said why. The browser still marks
+         which field; this just says out loud that something is missing. */
+      onInvalid={() => {
+        setFormError(
+          "Some details are still missing. The first one is highlighted below, and nothing has been sent yet.",
+        );
+        focusError();
+      }}
     >
       <div className="space-y-12">
         {/* Announced when it appears, and focusable so the scroll that
