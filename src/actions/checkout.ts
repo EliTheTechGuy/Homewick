@@ -105,7 +105,7 @@ async function firstMonthCoupon(): Promise<string> {
 async function membershipSession(subscriptionId: string) {
   const row = await queryOne<
     CustomerRow & {
-      unit_size: UnitSize;
+      unit_size: UnitSize | null;
       monthly_amount_cents: number;
       interval_days: number | null;
     }

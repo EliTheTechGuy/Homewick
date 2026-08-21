@@ -47,7 +47,8 @@ const schema = z.object({
   postalCode: z.string().trim().min(5, "ZIP is required").max(12),
   /** Decides which pay model the crew on this job is paid under. */
   propertyKind: z.enum(["apartment", "house"]),
-  unitSize: z.enum(UNIT_SIZES.map((u) => u.id) as [UnitSize, ...UnitSize[]]),
+  /** Apartments only. A house has no bracket, and inventing one stores a guess as a fact. */
+  unitSize: z.enum(UNIT_SIZES.map((u) => u.id) as [UnitSize, ...UnitSize[]]).optional(),
   /** Houses only. An apartment's size is its unitSize. */
   bedrooms: z.number().int().min(0).max(20).optional(),
   bathrooms: z.number().min(0).max(20).optional(),
@@ -118,10 +119,9 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
           input.line2 || null,
           input.city,
           input.postalCode,
-          // unit_size is not null in the schema and describes an apartment. A
-          // house still needs a value, so it takes the nearest bracket, and
-          // the real shape lives in bedrooms, bathrooms and square feet.
-          input.unitSize,
+          // Null on a house. The shape lives in bedrooms, bathrooms and
+          // square feet, which are real, rather than a bracket that is not.
+          input.propertyKind === "house" ? null : (input.unitSize ?? null),
           input.hasPets,
           // Decides which pay model every crew on this property is paid under,
           // so losing it is not cosmetic: a house would quietly pay its crew
@@ -189,7 +189,7 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
         [
           customerId,
           propertyId,
-          input.unitSize,
+          input.propertyKind === "house" ? null : (input.unitSize ?? null),
           input.amountCents,
           input.visitsPerPeriod ?? 1,
           input.startsOn,

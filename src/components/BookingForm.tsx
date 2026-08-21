@@ -220,18 +220,17 @@ export function BookingForm({
       // Enter in a field, where it keeps the fields in the request body instead
       // of appending them to the URL.
       method="post"
-      className="mt-12 grid gap-12 lg:grid-cols-[1fr_20rem]"
-    
       /* Native validation blocks the submit and jumps to the first empty
          field, showing a bubble that disappears the moment somebody looks
-         away. The page moved and nothing said why. The browser still marks
-         which field; this just says out loud that something is missing. */
+         away. The page moved and nothing said why. */
       onInvalid={() => {
-        setFormError(
-          "Some details are still missing. The first one is highlighted below, and nothing has been sent yet.",
-        );
+        setFormError("Some details are still missing.");
         focusError();
       }}
+      /* Refused fields go red, the way they do everywhere else.
+         :user-invalid only matches after somebody has interacted, so nothing
+         is red before it has been earned. */
+      className="mt-12 grid gap-12 lg:grid-cols-[1fr_20rem] [&_:user-invalid]:border-red-500 [&_:user-invalid]:bg-red-50"
     >
       <div className="space-y-12">
         {/* Announced when it appears, and focusable so the scroll that

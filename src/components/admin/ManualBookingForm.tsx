@@ -72,7 +72,7 @@ export function ManualBookingForm() {
         line2: String(data.get("line2") ?? ""),
         city: String(data.get("city") ?? ""),
         postalCode: String(data.get("postalCode") ?? ""),
-        unitSize: String(data.get("unitSize") ?? ""),
+        unitSize: propertyKind === "apartment" ? String(data.get("unitSize") ?? "") : undefined,
         propertyKind,
         bedrooms: propertyKind === "house" ? Number(data.get("bedrooms")) || undefined : undefined,
         bathrooms: propertyKind === "house" ? Number(data.get("bathrooms")) || undefined : undefined,
@@ -111,7 +111,14 @@ export function ManualBookingForm() {
         setResult(null);
         setMissing(true);
       }}
-      className="mt-8 space-y-8"
+      /* Refused fields go red, the way they do everywhere else.
+         :user-invalid only matches after somebody has interacted, so nothing
+         is red before it has been earned. */
+      className={
+        missing
+          ? "mt-8 space-y-8 [&_:user-invalid]:border-red-500 [&_:user-invalid]:bg-red-50"
+          : "mt-8 space-y-8"
+      }
     >
       {/* At the top, because the button is at the bottom of a long form and an
           answer rendered underneath it is an answer nobody scrolls back to. */}
@@ -128,8 +135,7 @@ export function ManualBookingForm() {
         >
           {missing ? (
             <p className="text-red-800">
-              Some details are still missing. The first one is highlighted below,
-              and nothing has been saved yet.
+              Some details are still missing.
             </p>
           ) : (
             <>
@@ -205,7 +211,7 @@ export function ManualBookingForm() {
           <Label label="Street address">
             <input name="line1" required className={field} />
           </Label>
-          <Label label="Apartment or unit">
+          <Label label={propertyKind === "house" ? "Unit or suite, if any" : "Apartment or unit"}>
             <input name="line2" className={field} />
           </Label>
           <Label label="City">
@@ -214,15 +220,20 @@ export function ManualBookingForm() {
           <Label label="ZIP">
             <input name="postalCode" required className={field} />
           </Label>
-          <Label label={propertyKind === "house" ? "Nearest bracket" : "Size"}>
-            <select name="unitSize" className={field} defaultValue="2br_2ba">
-              {UNIT_SIZES.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.label}
-                </option>
-              ))}
-            </select>
-          </Label>
+          {/* Apartments only. A house has no bracket, and asking which one it
+              is nearest is a question with no true answer: a 7 bed is not near
+              any of them, and whatever got picked was then stored as a fact. */}
+          {propertyKind === "apartment" && (
+            <Label label="Size">
+              <select name="unitSize" className={field} defaultValue="2br_2ba" required>
+                {UNIT_SIZES.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.label}
+                  </option>
+                ))}
+              </select>
+            </Label>
+          )}
           {propertyKind === "house" && (
             <>
               <Label label="Bedrooms">

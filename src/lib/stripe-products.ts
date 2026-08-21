@@ -12,18 +12,26 @@ import { UNIT_SIZES, unitSizeLabel, type UnitSize } from "./pricing";
  * Found by metadata rather than by name, so renaming one in the dashboard
  * does not orphan it.
  */
-export async function membershipProductId(size: UnitSize): Promise<string> {
+export async function membershipProductId(size: UnitSize | null): Promise<string> {
+  // A house has no unit size, so it gets its own product rather than being
+  // filed under whichever apartment bracket it least resembles. Houses are
+  // priced on a call, so one product covers all of them.
+  const key = size ?? "house";
+  const label = size ? unitSizeLabel(size) : "House";
+
   const s = stripe();
   const found = await s.products.search({
-    query: `active:'true' AND metadata['homewick_unit_size']:'${size}'`,
+    query: `active:'true' AND metadata['homewick_unit_size']:'${key}'`,
     limit: 1,
   });
   if (found.data[0]) return found.data[0].id;
 
   const created = await s.products.create({
-    name: `Homewick Membership, ${unitSizeLabel(size)}`,
-    description: "Two cleanings per billing period, one free add-on each period.",
-    metadata: { homewick_unit_size: size },
+    name: `Homewick ${size ? "Membership, " : "recurring clean, "}${label}`,
+    description: size
+      ? "Two cleanings per billing period, one free add-on each period."
+      : "Recurring house cleaning on an agreed schedule.",
+    metadata: { homewick_unit_size: key },
   });
   return created.id;
 }
