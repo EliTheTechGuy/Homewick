@@ -5,21 +5,24 @@ import { MembershipCards } from "@/components/MembershipCards";
 import { formatCents } from "@/lib/money";
 import {
   FREE_PERK_ELIGIBLE,
-  MEMBER_BENEFITS,
+  MEMBERSHIP_TIERS,
   PET_SURCHARGE_CENTS,
-  VISITS_PER_PERIOD,
 } from "@/lib/pricing";
 
 export const metadata: Metadata = {
   title: "Membership",
   description:
-    "Two apartment cleanings every month for one charge, with a free add-on each month and the same cleaner whenever scheduling allows.",
+    "Apartment cleaning once or twice a month for one charge, with the same cleaner whenever scheduling allows.",
 };
 
 const rules = [
   {
     q: `How many cleanings do I get?`,
-    a: `${VISITS_PER_PERIOD} per billing period. Your billing period is anchored to the date you sign up, not to the calendar month.`,
+    a: "Two per billing period on the twice-a-month membership, one on the once-a-month membership. Your billing period is anchored to the date you sign up, not to the calendar month.",
+  },
+  {
+    q: "Which one should I pick?",
+    a: "Twice a month is the cheaper way to buy cleaning, at 15% under the one-time rate for each visit, and it is the one that keeps a place steady. Once a month is for somewhere that only needs a reset now and then, and it is priced close to a one-time clean because it is one.",
   },
   {
     q: "Do unused cleanings roll over?",
@@ -31,12 +34,13 @@ const rules = [
   },
   {
     q: "How does the free add-on work?",
-    a: "One eligible add-on per billing period, claimed when you book the visit so it reaches your cleaner as part of the assignment. It resets each period and never accumulates.",
+    a: "One eligible add-on per billing period on the twice-a-month membership, claimed when you book the visit so it reaches your cleaner as part of the assignment. It resets each period and never accumulates. The once-a-month membership gets 10% off add-ons rather than one free.",
   },
   {
     q: "What happens when I join?",
-    a: "Your first month is 15% off, and it covers two cleanings like any other month. Every month after is the standard rate. There is nothing extra to buy at signup."
+    a: "On the twice-a-month membership your first month is 15% off and covers two cleanings like any other month. On the once-a-month membership the first charge is the ordinary rate. Either way there is nothing extra to buy at signup."
   },
+
   {
     q: "How do I cancel?",
     a: "Fourteen days' notice. If you give notice with 14 or more days left in your current period, service ends at the end of that period. Otherwise it runs through the following period. Visits keep being scheduled until the end date.",
@@ -58,8 +62,8 @@ export default function MembershipPage() {
         <SectionHeading
           as="h1"
           eyebrow="Membership"
-          title="Two cleanings every month, one simple charge."
-          lead="Membership is the cheapest way to use Homewick, and the reason the service stays consistent. The same apartment, the same standard, on a rhythm."
+          title="Cleaning on a rhythm, one simple charge."
+          lead="Twice a month is the cheapest way to use Homewick and the reason the service stays consistent. Once a month is there for a place that needs a reset rather than upkeep. The same apartment, the same standard, either way."
         />
         <MembershipCards className="mt-12" />
       </Section>
@@ -78,18 +82,30 @@ export default function MembershipPage() {
         <div className="grid gap-12 md:grid-cols-2">
           <div>
             <SectionHeading eyebrow="Included" title="What members get." />
-            <ul className="mt-8 space-y-4">
-              {MEMBER_BENEFITS.map((b) => (
-                <li key={b} className="flex gap-3 leading-relaxed text-body">
-                  <CheckIcon className="mt-1 h-5 w-5 shrink-0 text-accent" />
-                  <span>{b}</span>
-                </li>
+            {/* Side by side, because the difference between the two is the
+                decision being made on this page and a single merged list with
+                asterisks against half of it answers nobody. */}
+            <div className="mt-8 space-y-8">
+              {(["twice_monthly", "monthly"] as const).map((id) => (
+                <div key={id}>
+                  <h3 className="text-sm font-semibold uppercase tracking-widest text-muted">
+                    {MEMBERSHIP_TIERS[id].label}
+                  </h3>
+                  <ul className="mt-4 space-y-3">
+                    {MEMBERSHIP_TIERS[id].benefits.map((b) => (
+                      <li key={b} className="flex gap-3 leading-relaxed text-body">
+                        <CheckIcon className="mt-1 h-5 w-5 shrink-0 text-accent" />
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
           <Card>
             <h3 className="text-lg font-semibold text-navy">
-              Add-ons eligible as your free monthly perk
+              Add-ons eligible as the free monthly perk
             </h3>
             <ul className="mt-4 space-y-3">
               {FREE_PERK_ELIGIBLE.map((a) => (
@@ -105,8 +121,9 @@ export default function MembershipPage() {
               ))}
             </ul>
             <p className="mt-5 text-sm leading-relaxed text-muted">
-              Cabinet interiors and laundry are not eligible as the free perk, but members
-              still get 10% off them.
+              The free monthly add-on comes with the twice-a-month membership. Cabinet
+              interiors and laundry are not eligible as the free perk, but every member
+              gets 10% off them.
             </p>
           </Card>
         </div>

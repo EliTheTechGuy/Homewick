@@ -7,6 +7,13 @@ import { beforeAll, afterAll, test } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { citext } from "@electric-sql/pglite/contrib/citext";
 import { generateForSubscription, type SubscriptionRow } from "./membership-lifecycle";
+import {
+  MEMBERSHIP_TIERS,
+  SERVICE_PRICES,
+  frequencyForVisits,
+  type ServiceType,
+  type UnitSize,
+} from "./pricing";
 
 /**
  * Runs the migration sequence against a real Postgres (PGlite, in-process) and then
@@ -47,16 +54,54 @@ afterAll(async () => {
   await db?.close();
 });
 
+/**
+ * The catalog in code and the catalog in the database have to agree.
+ *
+ * Counting rows only proved something had been seeded. It said nothing about
+ * the numbers, so a price changed in one place and not the other would have
+ * gone through green. These read the currently effective row for every size
+ * and compare it against what the site quotes.
+ */
 test("schema applies cleanly and seeds launch pricing", async () => {
-  const services = await db.query<{ count: number }>(
-    "select count(*)::int as count from service_prices",
+  const services = await db.query<{
+    unit_size: string;
+    service_type: string;
+    amount_cents: number;
+  }>(
+    `select unit_size::text as unit_size, service_type::text as service_type, amount_cents
+       from service_prices
+      where effective_from <= current_date
+        and (effective_to is null or effective_to > current_date)`,
   );
-  assert.equal(services.rows[0].count, 9);
+  assert.equal(services.rows.length, 9, "one live price per size and service");
+  for (const row of services.rows) {
+    assert.equal(
+      row.amount_cents,
+      SERVICE_PRICES[row.unit_size as UnitSize][row.service_type as ServiceType],
+      `${row.unit_size} ${row.service_type} is priced differently in the database`,
+    );
+  }
 
-  const memberships = await db.query<{ count: number }>(
-    "select count(*)::int as count from membership_prices",
+  const memberships = await db.query<{
+    unit_size: string;
+    visits_included: number;
+    monthly_amount_cents: number;
+  }>(
+    `select unit_size::text as unit_size, visits_included, monthly_amount_cents
+       from membership_prices
+      where effective_from <= current_date
+        and (effective_to is null or effective_to > current_date)`,
   );
-  assert.equal(memberships.rows[0].count, 3);
+  assert.equal(memberships.rows.length, 6, "three sizes on each of the two tiers");
+  for (const row of memberships.rows) {
+    const frequency = frequencyForVisits(row.visits_included);
+    assert.ok(frequency, `${row.visits_included} visits matches no membership tier`);
+    assert.equal(
+      row.monthly_amount_cents,
+      MEMBERSHIP_TIERS[frequency].prices[row.unit_size as UnitSize].monthlyCents,
+      `${frequency} ${row.unit_size} is priced differently in the database`,
+    );
+  }
 
   const perk = await db.query<{ code: string }>(
     "select code from add_ons where free_perk_eligible order by sort_order",
@@ -886,4 +931,80 @@ test("a late webhook cannot resurrect a cancelled membership", async () => {
     );
     assert.equal(after.rows[0].status, state, `${state} must survive a late webhook`);
   }
+});
+
+test("a once-a-month membership generates one cleaning per period, not two", async () => {
+  const { customerId, propertyId } = await seedCustomer("oncemonthly@example.com");
+  const subscriptionId = await insertSubscription(
+    customerId,
+    propertyId,
+    "2026-01-15",
+    15,
+  );
+  await db.query(
+    "update subscriptions set visits_per_period = 1, monthly_amount_cents = 15200 where id = $1",
+    [subscriptionId],
+  );
+
+  const sub: SubscriptionRow = {
+    id: subscriptionId,
+    customer_id: customerId,
+    property_id: propertyId,
+    status: "active",
+    monthly_amount_cents: 15200,
+    visits_per_period: 1,
+    pet_surcharge_cents: 0,
+    interval_days: null,
+    preferred_weekday: 4,
+    preferred_weekday_second: null,
+    started_on: "2026-01-15",
+    billing_day: 15,
+    pending_amount_cents: null,
+    pending_amount_effective_on: null,
+    ends_on: null,
+  };
+
+  const run = await generateForSubscription(asClient(db), sub, "2026-01-15");
+  assert.ok(run.periodsCreated >= 2, "should create current and next period");
+  assert.equal(
+    run.visitsCreated,
+    run.periodsCreated,
+    "one cleaning per period, so a member paying for one is not sent two cleaners",
+  );
+
+  const allotted = await db.query<{ visits_allotted: number }>(
+    "select visits_allotted from subscription_periods where subscription_id = $1",
+    [subscriptionId],
+  );
+  for (const row of allotted.rows) {
+    assert.equal(row.visits_allotted, 1, "the ledger must allot what was paid for");
+  }
+
+  // The statement booking.ts runs to set what the first cleaning is. Kept here
+  // because it casts a text parameter to the service_type enum, and a bad cast
+  // is invisible to the typechecker and to every other test: it would only
+  // surface as a failed signup in production.
+  const promoted = await db.query(
+    `update visits
+        set service_type = $2::service_type
+      where id = (
+        select id from visits
+         where subscription_id = $1
+           and status in ('pending_payment', 'scheduled')
+         order by scheduled_for
+         limit 1
+      )`,
+    [subscriptionId, "standard"],
+  );
+  assert.equal(promoted.affectedRows, 1);
+
+  const services = await db.query<{ service_type: string }>(
+    `select service_type::text as service_type from visits
+      where subscription_id = $1 order by scheduled_for`,
+    [subscriptionId],
+  );
+  assert.ok(
+    services.rows.every((r) => r.service_type === "standard"),
+    "a once-a-month signup must not quietly hand out a deep clean",
+  );
 });

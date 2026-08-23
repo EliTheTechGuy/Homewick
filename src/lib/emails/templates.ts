@@ -204,19 +204,30 @@ export function cancellationConfirmedEmail(params: {
 /**
  * Membership started, first payment taken.
  *
- * This is the email that has to earn the subscription. It explains the three
- * things a member gets wrong otherwise: that there are two cleanings a month,
- * that the free add-on has to be chosen rather than appearing, and that it
- * does not roll over.
+ * This is the email that has to earn the subscription. It explains the things
+ * a member gets wrong otherwise: how many cleanings a month they have, that
+ * the free add-on has to be chosen rather than appearing, and that nothing
+ * rolls over.
+ *
+ * Written from the tier rather than around it. The previous version said "two
+ * cleanings" and "your free add-on" in fixed text, which for a once-a-month
+ * member would have promised a second visit that is never booked and an
+ * add-on they do not have. A welcome email that opens by describing somebody
+ * else's membership is worse than no welcome email.
  */
 export function membershipWelcomeEmail(params: {
   firstName: string;
   unitSize: UnitSize;
+  visitsPerPeriod: number;
+  freeAddOn: boolean;
   monthlyAmountCents: number;
   firstPaymentCents: number;
   visitDates: ISODate[];
   address: string;
 }): Composed {
+  const cleanings =
+    params.visitsPerPeriod === 1 ? "one cleaning" : `${params.visitsPerPeriod} cleanings`;
+
   const rows: Row[] = [
     { label: "Membership", value: unitSizeLabel(params.unitSize) },
     { label: "Paid today", value: formatCents(params.firstPaymentCents) },
@@ -224,22 +235,33 @@ export function membershipWelcomeEmail(params: {
     { label: "Where", value: params.address },
   ];
 
-  for (const [i, date] of params.visitDates.slice(0, 2).entries()) {
+  for (const [i, date] of params.visitDates
+    .slice(0, params.visitsPerPeriod)
+    .entries()) {
     rows.push({ label: i === 0 ? "First clean" : "Then", value: formatLong(date) });
   }
+
+  const body = params.freeAddOn
+    ? [
+        "<strong>Your free add-on.</strong> Every month you can add one extra job at no cost. Inside the oven, the fridge, interior windows, or the balcony. It is not automatic, so choose it in your account and it will reach your cleaner as part of the job.",
+        "It resets each month and does not carry over, so it is worth picking one each time.",
+        `${cleanings.charAt(0).toUpperCase()}${cleanings.slice(1)} a month, roughly a fortnight apart, on the weekday you chose. Need to move one? Get in touch and we will shift it within the month.`,
+      ]
+    : [
+        "<strong>Your cleaning day.</strong> One clean a month, on the weekday you chose. Need to move it? Get in touch and we will shift it within the month.",
+        "It does not carry over, so a month you skip is a month gone rather than two cleans banked for later.",
+        "Add-ons are 10% off for members, and you can add one to any visit from your account.",
+      ];
 
   return compose({
     subject: `Welcome to Homewick, ${params.firstName}`,
     heading: `Welcome, ${params.firstName}`,
-    intro:
-      "Your membership is active and your first cleanings are booked. One charge a month, two cleanings, nothing to arrange in between.",
+    intro: `Your membership is active and your ${params.visitsPerPeriod === 1 ? "first cleaning is" : "first cleanings are"} booked. One charge a month, ${cleanings}, nothing to arrange in between.`,
     rows,
-    body: [
-      "<strong>Your free add-on.</strong> Every month you can add one extra job at no cost. Inside the oven, the fridge, interior windows, or the balcony. It is not automatic, so choose it in your account and it will reach your cleaner as part of the job.",
-      "It resets each month and does not carry over, so it is worth picking one each time.",
-      "Two cleanings a month, roughly a fortnight apart, on the weekday you chose. Need to move one? Get in touch and we will shift it within the month.",
-    ],
-    cta: { label: "Choose this month's free add-on", url: `${site.url}/account` },
+    body,
+    cta: params.freeAddOn
+      ? { label: "Choose this month's free add-on", url: `${site.url}/account` }
+      : { label: "See your cleanings", url: `${site.url}/account` },
     footerNote:
       "Receipts and card changes are handled by Stripe. To cancel, get in touch. Membership needs 14 days' notice and we will confirm your end date.",
   });

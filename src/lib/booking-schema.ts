@@ -2,9 +2,12 @@ import { z } from "zod";
 import {
   ADD_ONS,
   FREE_PERK_ELIGIBLE,
+  MEMBERSHIP_FREQUENCIES,
   PET_SURCHARGE_CENTS,
   SERVICE_PRICES,
   firstMonthCents,
+  membershipTier,
+  type MembershipFrequency,
 } from "./pricing";
 import { isISODate } from "./dates";
 
@@ -12,6 +15,14 @@ const unitSize = z.enum(["studio_1br", "2br_2ba", "3br_2ba"]);
 const serviceType = z.enum(["standard", "deep", "move_out"]);
 const addOnCodes = ADD_ONS.map((a) => a.code) as [string, ...string[]];
 const freePerkCodes = FREE_PERK_ELIGIBLE.map((a) => a.code) as [string, ...string[]];
+
+/** Whether this booking is on a tier that includes the free add-on. */
+function membershipEntitlesFreeAddOn(
+  plan: "one_time" | "membership",
+  frequency: MembershipFrequency,
+): boolean {
+  return plan === "membership" && membershipTier(frequency).freeAddOn;
+}
 
 export const bookingSchema = z
   .object({
@@ -40,6 +51,14 @@ export const bookingSchema = z
     // 1. Apartment size · 2. Service type
     unitSize,
     plan: z.enum(["one_time", "membership"]),
+    /**
+     * Membership only. Ignored on a one-time booking, and defaulted rather
+     * than required so an older client that does not send it still gets the
+     * tier it was built against instead of a validation error.
+     */
+    frequency: z
+      .enum(MEMBERSHIP_FREQUENCIES as [MembershipFrequency, ...MembershipFrequency[]])
+      .default("twice_monthly"),
     serviceType: serviceType.optional(),
 
     // 3. Add-ons · 4. Free perk (members only)
@@ -93,11 +112,18 @@ export const bookingSchema = z
       });
     }
     // The free perk is a membership entitlement and must be an eligible add-on.
-    if (data.plan === "one_time" && data.freePerk) {
+    // Not every tier carries it: the once-a-month rate sits a few dollars
+    // under the one-time price, and a free add-on worth up to $45 on top of
+    // that would make it the better deal per dollar than the tier that is
+    // supposed to be the better deal.
+    if (data.freePerk && !membershipEntitlesFreeAddOn(data.plan, data.frequency)) {
       ctx.addIssue({
         code: "custom",
         path: ["freePerk"],
-        message: "The free add-on is a membership benefit",
+        message:
+          data.plan === "one_time"
+            ? "The free add-on is a membership benefit"
+            : "The free add-on comes with the twice-a-month membership",
       });
     }
     // Picking "Door code" and leaving it blank tells the cleaner nothing. The
@@ -122,13 +148,15 @@ const SERVICE_LINE_LABELS: Record<"standard" | "deep" | "move_out", string> = {
 /**
  * What the customer will be charged, in cents.
  *
- * Membership signups are billed as the monthly rate plus the discounted
- * onboarding deep clean, which is charged separately rather than folded into
- * the first month, the monthly price stays what the site says it is.
+ * A membership signup is billed as that tier's first charge and nothing else.
+ * There is no separate onboarding fee: the first cleaning is one of the ones
+ * the period already pays for.
  */
 export type QuoteParams = {
   plan: "one_time" | "membership";
   unitSize: "studio_1br" | "2br_2ba" | "3br_2ba";
+  /** Membership only. Defaults to the twice-a-month tier. */
+  frequency?: MembershipFrequency;
   serviceType?: "standard" | "deep" | "move_out";
   addOns: string[];
   freePerk?: string;
@@ -147,14 +175,24 @@ export function quoteBooking(input: BookingInput): Quote {
 /** Shared by the server action and the form's live estimate. */
 export function quoteFor(input: QuoteParams): Quote {
   const lines: { label: string; amountCents: number }[] = [];
+  const frequency = input.frequency ?? "twice_monthly";
+  const tier = membershipTier(frequency);
 
   if (input.plan === "membership") {
     // A member pays the membership price and nothing else. The onboarding deep
     // clean is one of the first month's two cleanings, not a second charge on
     // top, billing both charged twice for the same month of service.
+    //
+    // Only one tier is discounted, so the label is built from the tier rather
+    // than written out. A line that says 15% off next to a number that is not
+    // 15% off is the kind of thing a customer notices at exactly the wrong
+    // moment.
     lines.push({
-      label: "Membership, first month (15% off)",
-      amountCents: firstMonthCents(input.unitSize),
+      label:
+        tier.firstMonthDiscount > 0
+          ? `Membership, first month (${Math.round(tier.firstMonthDiscount * 100)}% off)`
+          : `Membership, ${tier.label.toLowerCase()}`,
+      amountCents: firstMonthCents(input.unitSize, frequency),
     });
   } else if (input.serviceType) {
     lines.push({
@@ -172,7 +210,7 @@ export function quoteFor(input: QuoteParams): Quote {
   for (const code of input.addOns) {
     const addOn = ADD_ONS.find((a) => a.code === code);
     if (!addOn) continue;
-    if (input.plan === "membership" && code === input.freePerk) {
+    if (input.plan === "membership" && tier.freeAddOn && code === input.freePerk) {
       lines.push({ label: `${addOn.name} (free this month)`, amountCents: 0 });
     } else {
       // Members get 10% off any additional add-ons.

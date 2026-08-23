@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Section } from "@/components/ui";
 import { formatCents } from "@/lib/money";
-import { PET_SURCHARGE_CENTS, VISITS_PER_PERIOD } from "@/lib/pricing";
+import { MEMBERSHIP_TIERS, PET_SURCHARGE_CENTS } from "@/lib/pricing";
 import { TERMS_VERSION, site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -38,9 +38,12 @@ export default function TermsPage() {
           <Clause n="2" title="Membership">
             <ul>
               <li>
-                A membership includes {VISITS_PER_PERIOD} cleanings per billing period.
-                Your billing period is anchored to your signup date, not the calendar
-                month.
+                A membership includes the cleanings its tier states per billing period,
+                {" "}
+                {MEMBERSHIP_TIERS.twice_monthly.visitsPerPeriod} on the twice-a-month
+                membership and {MEMBERSHIP_TIERS.monthly.visitsPerPeriod} on the
+                once-a-month membership. Your billing period is anchored to your signup
+                date, not the calendar month.
               </li>
               <li>
                 Unused cleanings do not roll over. They expire at the end of the billing
@@ -52,15 +55,17 @@ export default function TermsPage() {
                 be moved into a later period.
               </li>
               <li>
-                Members may claim one free add-on per billing period from the eligible
-                list. It must be selected when booking the visit so that it forms part of
-                the cleaner&apos;s assignment; it cannot be requested at the door. The
-                entitlement resets each period and does not accumulate.
+                Twice-a-month members may claim one free add-on per billing period from
+                the eligible list. It must be selected when booking the visit so that it
+                forms part of the cleaner&apos;s assignment; it cannot be requested at
+                the door. The entitlement resets each period and does not accumulate. The
+                once-a-month membership does not include a free add-on.
               </li>
               <li>
-                A new member's first billing period is charged at 15% off and includes
-                the same number of cleanings as any other period. Subsequent periods are
-                charged at the standard rate.
+                A new twice-a-month member&apos;s first billing period is charged at 15%
+                off and includes the same number of cleanings as any other period.
+                Subsequent periods are charged at the standard rate. The once-a-month
+                membership is charged at its standard rate from the first period.
               </li>
               <li>
                 Members receive 10% off additional add-ons, priority scheduling, and the

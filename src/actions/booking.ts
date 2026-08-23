@@ -17,10 +17,11 @@ import {
   type SubscriptionRow,
 } from "@/lib/membership-lifecycle";
 import {
-  MEMBERSHIP_PRICES,
   PET_SURCHARGE_CENTS,
   SERVICE_PRICES,
-  VISITS_PER_PERIOD,
+  membershipPrice,
+  membershipTier,
+  onboardingServiceType,
 } from "@/lib/pricing";
 import { TERMS_VERSION } from "@/lib/site";
 
@@ -211,6 +212,13 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
         const startedOn = today();
         const billingDay = Math.min(Number(startedOn.slice(8, 10)), 28);
 
+        // Everything that differs between the two membership tiers is read
+        // from one place: how many cleanings a period includes, what the
+        // period costs, whether a free add-on comes with it, and whether the
+        // first cleaning is upgraded to a deep clean.
+        const tier = membershipTier(input.frequency);
+        const monthlyCents = membershipPrice(input.frequency, input.unitSize).monthlyCents;
+
         const { rows: subRows } = await client.query<{ id: string }>(
           `insert into subscriptions
              (customer_id, property_id, unit_size, status, monthly_amount_cents,
@@ -223,10 +231,10 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
             propertyId,
             input.unitSize,
             // Snapshotted, not looked up, this is what grandfathers the rate.
-            MEMBERSHIP_PRICES[input.unitSize].monthlyCents,
-            VISITS_PER_PERIOD,
-            // Zero: the pet surcharge is one-time and sits on the onboarding
-            // deep clean below, never on the recurring subscription.
+            monthlyCents,
+            tier.visitsPerPeriod,
+            // Zero: the pet surcharge is one-time and sits on the first
+            // cleaning below, never on the recurring subscription.
             0,
             input.preferredWeekday ?? null,
             startedOn,
@@ -240,8 +248,8 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
           customer_id: customerId,
           property_id: propertyId,
           status: "pending_payment",
-          monthly_amount_cents: MEMBERSHIP_PRICES[input.unitSize].monthlyCents,
-          visits_per_period: VISITS_PER_PERIOD,
+          monthly_amount_cents: monthlyCents,
+          visits_per_period: tier.visitsPerPeriod,
           // Public bookings are always the monthly membership. Custom
           // cadences are entered in admin.
           interval_days: null,
@@ -266,9 +274,14 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
         // keeps the period ledger at two visits used, so the deep clean is one
         // of the two the first month already pays for rather than a third.
         // The one-time pet surcharge rides on it.
+        //
+        // Only on the tier that can afford it. A twice-a-month period buys two
+        // cleanings, so the deep one is half of what that month collects. A
+        // once-a-month period buys one, and a deep clean costs more than the
+        // period brings in with nothing else that month to balance it.
         await client.query(
           `update visits
-              set service_type = 'deep',
+              set service_type = $4::service_type,
                   pet_surcharge_cents = $2,
                   customer_instructions = $3
             where id = (
@@ -278,7 +291,12 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
                order by scheduled_for
                limit 1
             )`,
-          [subscriptionId, petSurcharge, input.instructions || null],
+          [
+            subscriptionId,
+            petSurcharge,
+            input.instructions || null,
+            onboardingServiceType(input.frequency),
+          ],
         );
 
         await attachAddOns(client, subscriptionId, input, true);
@@ -387,9 +405,14 @@ async function insertAddOns(
 
   let addOnsTotal = 0;
 
+  // Membership alone does not buy the free add-on, the tier does. The schema
+  // already refuses a perk on a tier without one, and this is the second lock
+  // on the same door: it is the line that decides whether money is charged.
+  const tierHasFreeAddOn = isMember && membershipTier(input.frequency).freeAddOn;
+
   for (const addOn of catalog) {
     const isFreePerk =
-      isMember && Boolean(input.freePerk) && addOn.code === input.freePerk;
+      tierHasFreeAddOn && Boolean(input.freePerk) && addOn.code === input.freePerk;
 
     // The free perk is claimed against the period ledger, under a row lock,
     // so a double submission cannot hand out two of them.

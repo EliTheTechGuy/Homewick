@@ -45,36 +45,10 @@ export const SERVICE_TYPES: { id: ServiceType; label: string; blurb: string }[] 
 
 /** One-time service pricing, in cents. */
 export const SERVICE_PRICES: Record<UnitSize, Record<ServiceType, number>> = {
-  studio_1br: { standard: 11000, deep: 16900, move_out: 20900 },
-  "2br_2ba": { standard: 15900, deep: 23900, move_out: 29900 },
-  "3br_2ba": { standard: 21900, deep: 32900, move_out: 39900 },
+  studio_1br: { standard: 11000, deep: 16000, move_out: 20900 },
+  "2br_2ba": { standard: 15900, deep: 22000, move_out: 29900 },
+  "3br_2ba": { standard: 21900, deep: 28000, move_out: 39900 },
 };
-
-/** Membership: two cleanings per billing period, 15% off each visit. */
-export const MEMBERSHIP_PRICES: Record<
-  UnitSize,
-  { monthlyCents: number; perVisitCents: number; savesCents: number }
-> = {
-  studio_1br: { monthlyCents: 18900, perVisitCents: 9500, savesCents: 3100 },
-  "2br_2ba": { monthlyCents: 26900, perVisitCents: 13500, savesCents: 4900 },
-  "3br_2ba": { monthlyCents: 36900, perVisitCents: 18500, savesCents: 6900 },
-};
-
-export const MOST_POPULAR_SIZE: UnitSize = "2br_2ba";
-
-export const VISITS_PER_PERIOD = 2;
-
-/**
- * Charged once, on the booking that introduces the pet home, never per visit.
- *
- * The original brief made this recurring per visit, which for a member on two
- * cleanings a month is an extra $30 every month for the life of the
- * membership. That is a lot to attach to something the customer cannot change
- * about their home, so it was deliberately reduced to a single charge at
- * signup. Reinstating a recurring version means repricing membership for pet
- * homes, not flipping a flag here.
- */
-export const PET_SURCHARGE_CENTS = 1500;
 
 /**
  * Discount on a new member's first month. Applied once, then the normal
@@ -87,12 +61,157 @@ export const PET_SURCHARGE_CENTS = 1500;
  */
 export const MEMBER_FIRST_MONTH_DISCOUNT = 0.15;
 
-/** What a new member pays today. Their second month onward is the full rate. */
-export function firstMonthCents(size: UnitSize): number {
-  return Math.round(
-    MEMBERSHIP_PRICES[size].monthlyCents * (1 - MEMBER_FIRST_MONTH_DISCOUNT),
+export type MembershipFrequency = "twice_monthly" | "monthly";
+
+export type MembershipTier = {
+  id: MembershipFrequency;
+  /** Cleanings included in each billing period. */
+  visitsPerPeriod: number;
+  label: string;
+  /** One line, used on the plan chooser in the booking form. */
+  blurb: string;
+  /** Fraction off the first month, or zero. */
+  firstMonthDiscount: number;
+  /** One eligible add-on free every period. */
+  freeAddOn: boolean;
+  /** The first cleaning after signup is quietly upgraded to a deep clean. */
+  onboardingDeepClean: boolean;
+  benefits: string[];
+  prices: Record<
+    UnitSize,
+    { monthlyCents: number; perVisitCents: number; savesCents: number }
+  >;
+};
+
+/**
+ * Two ways to be a member, and the difference is not only how often we come.
+ *
+ * The twice-monthly tier is the discounted one. It is roughly 15% under two
+ * one-time cleans, so it carries the extras: the discounted first month, the
+ * free add-on, and a deep clean to start from.
+ *
+ * The once-monthly tier exists because customers asked for it, and it is
+ * priced close to the one-time rate on purpose, a few dollars under. That gap
+ * is too narrow to carry any of the extras. A free add-on is worth up to $45,
+ * which on a $152 clean would make the cheaper tier the better deal per
+ * dollar, and an onboarding deep clean on a month with only one visit costs
+ * more than the month collects. Both are switched off here rather than in the
+ * code that reads them, so the reason lives with the price.
+ */
+export const MEMBERSHIP_TIERS: Record<MembershipFrequency, MembershipTier> = {
+  twice_monthly: {
+    id: "twice_monthly",
+    visitsPerPeriod: 2,
+    label: "Twice a month",
+    blurb: "Two cleanings a month, 15% off every visit, one free add-on each month.",
+    firstMonthDiscount: MEMBER_FIRST_MONTH_DISCOUNT,
+    freeAddOn: true,
+    onboardingDeepClean: true,
+    benefits: [
+      "Two cleanings every billing period",
+      "One free add-on every month from the eligible list",
+      "The same cleaner whenever scheduling allows",
+      "15% off your first month",
+      "10% off any additional add-ons",
+      "Priority scheduling",
+    ],
+    prices: {
+      studio_1br: { monthlyCents: 18900, perVisitCents: 9500, savesCents: 3100 },
+      "2br_2ba": { monthlyCents: 26900, perVisitCents: 13500, savesCents: 4900 },
+      "3br_2ba": { monthlyCents: 36900, perVisitCents: 18500, savesCents: 6900 },
+    },
+  },
+  monthly: {
+    id: "monthly",
+    visitsPerPeriod: 1,
+    label: "Once a month",
+    blurb: "One cleaning a month on the same day, booked and billed automatically.",
+    firstMonthDiscount: 0,
+    freeAddOn: false,
+    onboardingDeepClean: false,
+    benefits: [
+      "One cleaning every billing period",
+      "The same cleaner whenever scheduling allows",
+      "10% off add-ons",
+      "Priority scheduling",
+      "Cancel with 14 days' notice",
+    ],
+    prices: {
+      studio_1br: { monthlyCents: 10500, perVisitCents: 10500, savesCents: 500 },
+      "2br_2ba": { monthlyCents: 15200, perVisitCents: 15200, savesCents: 700 },
+      "3br_2ba": { monthlyCents: 20900, perVisitCents: 20900, savesCents: 1000 },
+    },
+  },
+};
+
+export const MEMBERSHIP_FREQUENCIES: MembershipFrequency[] = [
+  "twice_monthly",
+  "monthly",
+];
+
+export const DEFAULT_MEMBERSHIP_FREQUENCY: MembershipFrequency = "twice_monthly";
+
+export const MOST_POPULAR_SIZE: UnitSize = "2br_2ba";
+
+export function membershipTier(frequency: MembershipFrequency): MembershipTier {
+  return MEMBERSHIP_TIERS[frequency];
+}
+
+export function membershipPrice(frequency: MembershipFrequency, size: UnitSize) {
+  return MEMBERSHIP_TIERS[frequency].prices[size];
+}
+
+/**
+ * Which tier a subscription is on, worked out from the visits it includes.
+ *
+ * Subscriptions store visits_per_period rather than a tier name, because that
+ * number is what the visit generator and the payout split actually use. A
+ * cadence agreed by hand in admin can be any number and matches no tier, hence
+ * the null: the caller has to decide what to do about that rather than being
+ * handed the wrong tier's rules.
+ */
+export function frequencyForVisits(
+  visitsPerPeriod: number,
+): MembershipFrequency | null {
+  return (
+    MEMBERSHIP_FREQUENCIES.find(
+      (f) => MEMBERSHIP_TIERS[f].visitsPerPeriod === visitsPerPeriod,
+    ) ?? null
   );
 }
+
+/**
+ * What a new member's first cleaning is booked as.
+ *
+ * Operational only: a member buys "cleanings" and never sees this split. It is
+ * a function rather than a ternary at the call site because it decides how much
+ * work is done for the first payment, and a decision about money with nothing
+ * asserting it is a decision that changes by accident.
+ */
+export function onboardingServiceType(frequency: MembershipFrequency): ServiceType {
+  return MEMBERSHIP_TIERS[frequency].onboardingDeepClean ? "deep" : "standard";
+}
+
+/** What a new member pays today. Their second month onward is the full rate. */
+export function firstMonthCents(
+  size: UnitSize,
+  frequency: MembershipFrequency = DEFAULT_MEMBERSHIP_FREQUENCY,
+): number {
+  const tier = MEMBERSHIP_TIERS[frequency];
+  return Math.round(tier.prices[size].monthlyCents * (1 - tier.firstMonthDiscount));
+}
+
+/**
+ * Charged once, on the booking that introduces the pet home, never per visit.
+ *
+ * The original brief made this recurring per visit, which for a member on two
+ * cleanings a month is an extra $30 every month for the life of the
+ * membership. That is a lot to attach to something the customer cannot change
+ * about their home, so it was deliberately reduced to a single charge at
+ * signup. Reinstating a recurring version means repricing membership for pet
+ * homes, not flipping a flag here.
+ */
+export const PET_SURCHARGE_CENTS = 1500;
 
 export type AddOn = {
   code: string;
@@ -112,14 +231,6 @@ export const ADD_ONS: AddOn[] = [
 ];
 
 export const FREE_PERK_ELIGIBLE = ADD_ONS.filter((a) => a.freePerkEligible);
-
-export const MEMBER_BENEFITS = [
-  "One free add-on every month from the eligible list",
-  "The same cleaner whenever scheduling allows",
-  "15% off your first month",
-  "10% off any additional add-ons",
-  "Priority scheduling",
-];
 
 export function unitSizeLabel(size: UnitSize): string {
   return UNIT_SIZES.find((u) => u.id === size)?.label ?? size;

@@ -55,9 +55,22 @@ const samples = {
   membership: membershipWelcomeEmail({
     firstName: "Elisha",
     unitSize: "2br_2ba",
+    visitsPerPeriod: 2,
+    freeAddOn: true,
     monthlyAmountCents: 26900,
     firstPaymentCents: 22865,
     visitDates: ["2026-08-20", "2026-09-03"],
+    address: "900 Ross Ave, Apt 7, Dallas, TX 75202",
+  }),
+  // The other tier reads differently enough to be worth previewing on its own.
+  membership_monthly: membershipWelcomeEmail({
+    firstName: "Elisha",
+    unitSize: "2br_2ba",
+    visitsPerPeriod: 1,
+    freeAddOn: false,
+    monthlyAmountCents: 15200,
+    firstPaymentCents: 15200,
+    visitDates: ["2026-08-20"],
     address: "900 Ross Ave, Apt 7, Dallas, TX 75202",
   }),
 };

@@ -31,6 +31,8 @@ export type MemberOverview = {
      * it is charged every this-many days, not every month.
      */
     intervalDays: number | null;
+    /** Cleanings the period includes, which is what tells the two tiers apart. */
+    visitsPerPeriod: number;
     endsOn: string | null;
     /**
      * What the end date would be if they cancelled today. Shown before they
@@ -220,6 +222,7 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
       unitSize: sub.unit_size,
       /** Null is the ordinary monthly membership. A value is a custom cadence. */
       intervalDays: sub.interval_days,
+      visitsPerPeriod: sub.visits_per_period,
       endsOn: sub.ends_on,
       wouldEndOn: cancellationEndDate({
         id: sub.id,

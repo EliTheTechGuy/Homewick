@@ -31,8 +31,8 @@ export default function PricingPage() {
       <Section>
         <h2 className="text-2xl font-semibold text-navy">Membership</h2>
         <p className="mt-3 max-w-2xl text-muted">
-          Two cleanings every month for one charge, at 15% off the one-time rate for each
-          visit.
+          Cleaning on a schedule for one charge, once or twice a month. Twice a month
+          comes in at 15% under the one-time rate for each visit.
         </p>
         <MembershipCards className="mt-10" />
       </Section>

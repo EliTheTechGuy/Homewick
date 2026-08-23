@@ -11,10 +11,14 @@ import { WEEKDAYS, today, addDays, addMonths, formatLong } from "@/lib/dates";
 import {
   ADD_ONS,
   FREE_PERK_ELIGIBLE,
-  MEMBERSHIP_PRICES,
+  MEMBERSHIP_FREQUENCIES,
+  MEMBERSHIP_TIERS,
   PET_SURCHARGE_CENTS,
   SERVICE_TYPES,
   UNIT_SIZES,
+  membershipPrice,
+  membershipTier,
+  type MembershipFrequency,
   type ServiceType,
   type UnitSize,
 } from "@/lib/pricing";
@@ -58,9 +62,11 @@ const ENTRY_METHODS: {
 export function BookingForm({
   initialPlan,
   initialSize,
+  initialFrequency,
 }: {
   initialPlan: Plan;
   initialSize: UnitSize;
+  initialFrequency: MembershipFrequency;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -82,6 +88,7 @@ export function BookingForm({
   }
 
   const [plan, setPlan] = useState<Plan>(initialPlan);
+  const [frequency, setFrequency] = useState<MembershipFrequency>(initialFrequency);
   const [unitSize, setUnitSize] = useState<UnitSize>(initialSize);
   const [serviceType, setServiceType] = useState<ServiceType>("standard");
   const [addOns, setAddOns] = useState<string[]>([]);
@@ -109,17 +116,32 @@ export function BookingForm({
   const detailLabel =
     ENTRY_METHODS.find((m) => m.id === entryMethod)?.detailLabel ?? null;
 
+  const tier = membershipTier(frequency);
+
+  /**
+   * Switching tier clears a free add-on the new tier does not include.
+   *
+   * Without this, somebody who picked their free oven clean and then moved to
+   * the once-a-month tier would keep a selection that the server refuses, and
+   * the rejection would name a field no longer on screen.
+   */
+  function chooseFrequency(next: MembershipFrequency) {
+    setFrequency(next);
+    if (!MEMBERSHIP_TIERS[next].freeAddOn) setFreePerk("");
+  }
+
   const quote = useMemo(
     () =>
       quoteFor({
         plan,
         unitSize,
+        frequency,
         serviceType: plan === "one_time" ? serviceType : undefined,
         addOns,
         freePerk: freePerk || undefined,
         hasPets,
       }),
-    [plan, unitSize, serviceType, addOns, freePerk, hasPets],
+    [plan, frequency, unitSize, serviceType, addOns, freePerk, hasPets],
   );
 
   function toggleAddOn(code: string) {
@@ -158,9 +180,10 @@ export function BookingForm({
       postalCode: field("postalCode"),
       unitSize,
       plan,
+      frequency,
       serviceType: plan === "one_time" ? serviceType : undefined,
       addOns,
-      freePerk: plan === "membership" ? freePerk : "",
+      freePerk: plan === "membership" && tier.freeAddOn ? freePerk : "",
       hasPets,
       preferredWeekday:
         plan === "membership" ? Number(preferredWeekday) : undefined,
@@ -258,7 +281,7 @@ export function BookingForm({
               selected={plan === "membership"}
               onSelect={() => setPlan("membership")}
               title="Membership"
-              body="Two cleanings a month, 15% off every visit, one free add-on each month."
+              body="Recurring cleanings on a schedule, billed automatically."
             />
             <Choice
               name="planChoice"
@@ -270,6 +293,28 @@ export function BookingForm({
             />
           </div>
         </Fieldset>
+
+        {/* Frequency, and not merely a schedule preference: it sets the price,
+            whether a free add-on comes with it, and whether the first month is
+            discounted. Shown as its own step rather than folded into the plan
+            choice above, so all four options are not competing in one row. */}
+        {plan === "membership" && (
+          <Fieldset legend="How often would you like us?">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {MEMBERSHIP_FREQUENCIES.map((id) => (
+                <Choice
+                  key={id}
+                  name="frequencyChoice"
+                  value={id}
+                  selected={frequency === id}
+                  onSelect={() => chooseFrequency(id)}
+                  title={MEMBERSHIP_TIERS[id].label}
+                  body={MEMBERSHIP_TIERS[id].blurb}
+                />
+              ))}
+            </div>
+          </Fieldset>
+        )}
 
         {/* Size */}
         <Fieldset legend="Apartment size" error={errors.unitSize}>
@@ -339,8 +384,8 @@ export function BookingForm({
           </div>
         </Fieldset>
 
-        {/* Free perk */}
-        {plan === "membership" && (
+        {/* Free perk. Only on the tier that includes one. */}
+        {plan === "membership" && tier.freeAddOn && (
           <Fieldset
             legend="Your free add-on this month"
             error={errors.freePerk}
@@ -561,7 +606,7 @@ export function BookingForm({
                 </span>
               </span>
               <span className="shrink-0 font-semibold text-navy">
-                {formatCents(MEMBERSHIP_PRICES[unitSize].monthlyCents)}
+                {formatCents(membershipPrice(frequency, unitSize).monthlyCents)}
               </span>
             </div>
           )}
@@ -574,8 +619,11 @@ export function BookingForm({
           </div>
           {plan === "membership" && (
             <p className="mt-4 text-xs leading-relaxed text-muted">
-              Two cleanings every month for that price. Cancel any time with 14
-              days&apos; notice, from your account or by getting in touch.
+              {tier.visitsPerPeriod === 1
+                ? "One cleaning every month for that price."
+                : `${tier.visitsPerPeriod} cleanings every month for that price.`}{" "}
+              Cancel any time with 14 days&apos; notice, from your account or by
+              getting in touch.
             </p>
           )}
 

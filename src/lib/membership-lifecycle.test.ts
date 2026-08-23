@@ -5,9 +5,12 @@ import { visitReminderEmail } from "./emails/templates";
 import { quoteFor } from "./booking-schema";
 import { hashPassword, verifyPassword, passwordProblem } from "./passwords";
 import {
-  MEMBERSHIP_PRICES,
+  MEMBERSHIP_TIERS,
   MEMBER_FIRST_MONTH_DISCOUNT,
   PET_SURCHARGE_CENTS,
+  SERVICE_PRICES,
+  frequencyForVisits,
+  onboardingServiceType,
 } from "./pricing";
 import {
   cancellationEndDate,
@@ -300,7 +303,9 @@ test("a front-desk booking needs no entry code", async () => {
 
 test("a member is not charged twice for their first month", async () => {
   const { quoteFor } = await import("./booking-schema");
-  const { MEMBERSHIP_PRICES, SERVICE_PRICES } = await import("./pricing");
+  const { MEMBERSHIP_TIERS, SERVICE_PRICES } = await import("./pricing");
+  const monthlyCents = (size: "studio_1br" | "2br_2ba" | "3br_2ba") =>
+    MEMBERSHIP_TIERS.twice_monthly.prices[size].monthlyCents;
 
   for (const size of ["studio_1br", "2br_2ba", "3br_2ba"] as const) {
     const quote = quoteFor({ plan: "membership", unitSize: size, addOns: [], hasPets: false });
@@ -308,16 +313,15 @@ test("a member is not charged twice for their first month", async () => {
     // One line, one charge: the discounted first month. A separately billed
     // onboarding deep clean on top meant paying twice for the same month.
     assert.equal(quote.lines.length, 1, `${size} should quote a single charge`);
-    assert.equal(quote.totalCents, Math.round(MEMBERSHIP_PRICES[size].monthlyCents * 0.85));
+    assert.equal(quote.totalCents, Math.round(monthlyCents(size) * 0.85));
 
     // Never more than the ordinary monthly rate.
     assert.ok(
-      quote.totalCents < MEMBERSHIP_PRICES[size].monthlyCents,
+      quote.totalCents < monthlyCents(size),
       `${size} first month should be below the standard rate`,
     );
     // And nowhere near the old membership-plus-deep-clean figure.
-    const oldTotal =
-      MEMBERSHIP_PRICES[size].monthlyCents + Math.round(SERVICE_PRICES[size].deep * 0.85);
+    const oldTotal = monthlyCents(size) + Math.round(SERVICE_PRICES[size].deep * 0.85);
     assert.ok(quote.totalCents < oldTotal);
   }
 });
@@ -482,7 +486,10 @@ test("the welcome discount comes off the membership and nothing else", () => {
   assert.ok(membershipLine, "a membership booking must quote a membership line");
   assert.equal(
     membershipLine.amountCents,
-    Math.round(MEMBERSHIP_PRICES["2br_2ba"].monthlyCents * (1 - MEMBER_FIRST_MONTH_DISCOUNT)),
+    Math.round(
+      MEMBERSHIP_TIERS.twice_monthly.prices["2br_2ba"].monthlyCents *
+        (1 - MEMBER_FIRST_MONTH_DISCOUNT),
+    ),
     "the membership line carries the whole first-month discount",
   );
 
@@ -510,7 +517,7 @@ test("every membership size quotes a first month of exactly 15 percent off", () 
       freePerk: undefined,
     } as never);
 
-    const monthly = MEMBERSHIP_PRICES[size].monthlyCents;
+    const monthly = MEMBERSHIP_TIERS.twice_monthly.prices[size].monthlyCents;
     assert.equal(
       quote.totalCents,
       Math.round(monthly * (1 - MEMBER_FIRST_MONTH_DISCOUNT)),
@@ -625,4 +632,129 @@ test("custom interval: a null interval leaves the monthly path exactly as it was
   assert.equal(p.start, "2026-01-15");
   assert.equal(p.end, "2026-02-15");
   assert.equal(nextPeriod(monthly, p).end, "2026-03-15");
+});
+
+// --- The once-a-month tier --------------------------------------------
+//
+// It is priced within a few dollars of a one-time clean, so every benefit it
+// picks up by accident from the discounted tier costs more than the tier
+// makes. These are the ways that could happen quietly.
+
+test("the once-a-month tier quotes its full published rate", () => {
+  for (const size of ["studio_1br", "2br_2ba", "3br_2ba"] as const) {
+    const quote = quoteFor({
+      plan: "membership",
+      unitSize: size,
+      frequency: "monthly",
+      addOns: [],
+      hasPets: false,
+    });
+
+    assert.equal(quote.lines.length, 1, `${size} should quote a single charge`);
+    assert.equal(
+      quote.totalCents,
+      MEMBERSHIP_TIERS.monthly.prices[size].monthlyCents,
+      `${size} once a month must be charged in full, not discounted`,
+    );
+    assert.doesNotMatch(
+      quote.lines[0].label,
+      /% off/,
+      "a line that says 15% off next to a number that is not 15% off is a complaint waiting to happen",
+    );
+  }
+});
+
+test("no tier is ever priced above what the same cleaning costs one at a time", () => {
+  for (const frequency of ["twice_monthly", "monthly"] as const) {
+    const tier = MEMBERSHIP_TIERS[frequency];
+    for (const size of ["studio_1br", "2br_2ba", "3br_2ba"] as const) {
+      const oneAtATime = SERVICE_PRICES[size].standard * tier.visitsPerPeriod;
+      const price = tier.prices[size];
+
+      assert.ok(
+        price.monthlyCents < oneAtATime,
+        `${frequency} ${size} costs more than buying the same cleanings singly`,
+      );
+      // The advertised saving is the whole of the difference. Stated rather
+      // than derived in the catalog, so it can drift from the one-time prices
+      // it is measured against, and a saving the arithmetic does not support
+      // is the kind of thing a customer checks.
+      assert.equal(
+        price.savesCents,
+        oneAtATime - price.monthlyCents,
+        `${frequency} ${size} advertises a saving its own prices do not support`,
+      );
+    }
+  }
+});
+
+test("a free add-on cannot be claimed on a tier that does not include one", async () => {
+  const { bookingSchema } = await import("./booking-schema");
+
+  const base = {
+    firstName: "Once", lastName: "Monthly",
+    email: "once@example.com", phone: "2145550188",
+    line1: "900 Ross Ave", line2: "", city: "Dallas", state: "TX",
+    postalCode: "75202",
+    unitSize: "2br_2ba", plan: "membership", preferredWeekday: 4,
+    addOns: ["oven"], freePerk: "oven", hasPets: false,
+    entryMethod: "front_desk", entryDetail: "",
+    alarmInstructions: "", instructions: "", preferredDate: "",
+    smsConsent: false, acceptTerms: true,
+  };
+
+  const twice = bookingSchema.safeParse({ ...base, frequency: "twice_monthly" });
+  assert.equal(twice.success, true, "the twice-a-month tier does include one");
+
+  const once = bookingSchema.safeParse({ ...base, frequency: "monthly" });
+  assert.equal(once.success, false, "the once-a-month tier does not");
+
+  // And the quote refuses it too, so a caller that skipped the schema still
+  // cannot hand out a $35 job for nothing.
+  const quote = quoteFor({
+    plan: "membership",
+    unitSize: "2br_2ba",
+    frequency: "monthly",
+    addOns: ["oven"],
+    freePerk: "oven",
+    hasPets: false,
+  });
+  assert.ok(
+    quote.lines.every((l) => !/free/i.test(l.label)),
+    "nothing on the once-a-month tier is free",
+  );
+  assert.equal(
+    quote.totalCents,
+    MEMBERSHIP_TIERS.monthly.prices["2br_2ba"].monthlyCents + Math.round(3500 * 0.9),
+    "the add-on is charged at the member rate, not given away",
+  );
+});
+
+test("a subscription's tier is recognised from the visits it includes", () => {
+  assert.equal(frequencyForVisits(2), "twice_monthly");
+  assert.equal(frequencyForVisits(1), "monthly");
+  // A cadence agreed by hand belongs to no tier, and must not be mapped onto
+  // the nearest one: that is how a $145 house arrangement would inherit the
+  // first-month discount and the free add-on.
+  assert.equal(frequencyForVisits(3), null);
+  assert.equal(frequencyForVisits(0), null);
+});
+
+test("only the tier that pays for a deep clean gets one at signup", () => {
+  // Two cleanings a month can carry a deep one as the first of the two. One
+  // cleaning a month cannot: the deep clean for a 2 bed lists at $220 and the
+  // period collects $152, with nothing else that month to make it back.
+  assert.equal(onboardingServiceType("twice_monthly"), "deep");
+  assert.equal(onboardingServiceType("monthly"), "standard");
+
+  for (const frequency of ["twice_monthly", "monthly"] as const) {
+    const tier = MEMBERSHIP_TIERS[frequency];
+    if (onboardingServiceType(frequency) !== "deep") continue;
+    for (const size of ["studio_1br", "2br_2ba", "3br_2ba"] as const) {
+      assert.ok(
+        tier.prices[size].monthlyCents > SERVICE_PRICES[size].deep,
+        `${frequency} ${size} would give away a deep clean worth more than the period collects`,
+      );
+    }
+  }
 });
