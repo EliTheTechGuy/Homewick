@@ -10,7 +10,11 @@
  */
 
 import { readFileSync } from "node:fs";
-import { membershipWelcomeEmail, oneTimeBookingEmail } from "../src/lib/emails/templates";
+import {
+  membershipEndedEmail,
+  membershipWelcomeEmail,
+  oneTimeBookingEmail,
+} from "../src/lib/emails/templates";
 
 for (const file of [".env.local", ".env"]) {
   try {
@@ -61,6 +65,12 @@ const samples = {
     firstPaymentCents: 22865,
     visitDates: ["2026-08-20", "2026-09-03"],
     address: "900 Ross Ave, Apt 7, Dallas, TX 75202",
+  }),
+  membership_ended: membershipEndedEmail({
+    firstName: "Elisha",
+    endedOn: "2026-09-15",
+    lastVisit: "2026-09-03",
+    unsubscribeUrl: "https://homewickcleaning.net/unsubscribe/example/token",
   }),
   // The other tier reads differently enough to be worth previewing on its own.
   membership_monthly: membershipWelcomeEmail({

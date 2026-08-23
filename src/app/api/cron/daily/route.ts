@@ -50,7 +50,7 @@ export async function GET(request: Request) {
       console.error("Stripe reconciliation failed", err);
     }
 
-    let emails = { remindersSent: 0, nudgesSent: 0 };
+    let emails = { remindersSent: 0, nudgesSent: 0, feedbackSent: 0, endedSent: 0 };
     try {
       emails = await sendScheduledEmails();
     } catch (err) {
