@@ -1,5 +1,5 @@
 import { site } from "@/lib/site";
-import { MEMBERSHIP_PRICES, SERVICE_PRICES, UNIT_SIZES } from "@/lib/pricing";
+import { MEMBERSHIP_TIERS, SERVICE_PRICES, UNIT_SIZES } from "@/lib/pricing";
 
 /**
  * Tells search engines what this business is, where it works, and what it
@@ -55,7 +55,18 @@ export function StructuredData() {
           "@type": "Offer",
           name: `Membership, ${size.label}`,
           description: "Two cleanings per month, one free add-on each month.",
-          price: (MEMBERSHIP_PRICES[size.id].monthlyCents / 100).toFixed(2),
+          price: (
+            MEMBERSHIP_TIERS.twice_monthly.prices[size.id].monthlyCents / 100
+          ).toFixed(2),
+          priceCurrency: "USD",
+          availability: "https://schema.org/InStock",
+          url: `${site.url}/membership`,
+        })),
+        ...UNIT_SIZES.map((size) => ({
+          "@type": "Offer",
+          name: `Membership, once a month, ${size.label}`,
+          description: "One cleaning per month on a recurring schedule.",
+          price: (MEMBERSHIP_TIERS.monthly.prices[size.id].monthlyCents / 100).toFixed(2),
           priceCurrency: "USD",
           availability: "https://schema.org/InStock",
           url: `${site.url}/membership`,

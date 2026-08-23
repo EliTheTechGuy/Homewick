@@ -7,6 +7,8 @@ import { allMembershipProductIds, membershipProductId } from "@/lib/stripe-produ
 import { site } from "@/lib/site";
 import {
   MEMBER_FIRST_MONTH_DISCOUNT,
+  frequencyForVisits,
+  membershipTier,
   unitSizeLabel,
   type UnitSize,
 } from "@/lib/pricing";
@@ -108,10 +110,11 @@ async function membershipSession(subscriptionId: string) {
       unit_size: UnitSize | null;
       monthly_amount_cents: number;
       interval_days: number | null;
+      visits_per_period: number;
     }
   >(
     `select s.customer_id, s.unit_size, s.monthly_amount_cents, s.interval_days,
-            c.email, c.stripe_customer_id
+            s.visits_per_period, c.email, c.stripe_customer_id
        from subscriptions s
        join customers c on c.id = s.customer_id
       where s.id = $1`,
@@ -119,10 +122,18 @@ async function membershipSession(subscriptionId: string) {
   );
   if (!row) return { error: "That booking could not be found." };
 
-  // The one-time pet surcharge rides on the member's first cleaning, which is
-  // their onboarding deep clean. Every chargeable component is read back, not
-  // just the headline rate, reading only the base once quoted a pet home
-  // $487.15 and charged $472.15.
+  // Which published tier this is, read back from the subscription rather than
+  // passed in, so the charge is built from what was actually stored. Null
+  // means a cadence agreed by hand in admin, which belongs to no tier and gets
+  // no tier's benefits.
+  const frequency = row.interval_days == null
+    ? frequencyForVisits(row.visits_per_period)
+    : null;
+  const tier = frequency ? membershipTier(frequency) : null;
+
+  // The one-time pet surcharge rides on the member's first cleaning. Every
+  // chargeable component is read back, not just the headline rate, reading
+  // only the base once quoted a pet home $487.15 and charged $472.15.
   const firstVisit = await queryOne<{ pet_surcharge_cents: number }>(
     `select pet_surcharge_cents from visits
       where subscription_id = $1
@@ -141,7 +152,14 @@ async function membershipSession(subscriptionId: string) {
     [subscriptionId],
   );
 
-  const productId = await membershipProductId(row.unit_size);
+  // A hand-agreed cadence has no tier, and it lands on the published tier's
+  // product. That is only a label on the invoice, and it is what these have
+  // always been filed under. It carries no discount with it: the coupon below
+  // is attached explicitly, never by virtue of the product.
+  const productId = await membershipProductId(
+    row.unit_size,
+    frequency ?? "twice_monthly",
+  );
 
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
     {
@@ -190,10 +208,13 @@ async function membershipSession(subscriptionId: string) {
     // once-duration coupon is how Stripe expresses that, and it keeps the
     // recurring price honest, the subscription really is $269/month, so a
     // rate change later does not have to unpick a bespoke first invoice.
-    // Only on the published monthly membership. A custom cadence is a price
-    // agreed by hand, and taking a further 15% off it would undercut the deal
-    // that was actually struck rather than welcome anybody.
-    ...(row.interval_days == null
+    //
+    // Only where the tier says so, which today means the twice-a-month one.
+    // A custom cadence is a price agreed by hand and taking a further 15% off
+    // it would undercut the deal that was actually struck. The once-a-month
+    // tier is already priced within a few dollars of the one-time rate, so
+    // discounting it further would sell a clean under what it costs to do.
+    ...(tier && tier.firstMonthDiscount > 0
       ? { discounts: [{ coupon: await firstMonthCoupon() }] }
       : {}),
     customer: row.stripe_customer_id ?? undefined,

@@ -5,7 +5,14 @@ import { changeMembershipSize, updateAddress } from "@/actions/profile";
 import { cadenceLabel } from "@/lib/cadence";
 import { formatLong } from "@/lib/dates";
 import { formatCents } from "@/lib/money";
-import { MEMBERSHIP_PRICES, UNIT_SIZES, unitSizeLabel, type UnitSize } from "@/lib/pricing";
+import {
+  UNIT_SIZES,
+  frequencyForVisits,
+  membershipPrice,
+  membershipTier,
+  unitSizeLabel,
+  type UnitSize,
+} from "@/lib/pricing";
 import type { MemberOverview } from "@/lib/member-account";
 import { Card } from "@/components/ui";
 
@@ -72,6 +79,7 @@ export function ProfileSection({ overview }: { overview: MemberOverview }) {
           <SizeChooser
             current={subscription.unitSize}
             currentRateCents={subscription.monthlyAmountCents}
+            visitsPerPeriod={subscription.visitsPerPeriod}
             pendingRate={pendingRate}
           />
         ) : (
@@ -228,12 +236,18 @@ function AddressForm({
 function SizeChooser({
   current,
   currentRateCents,
+  visitsPerPeriod,
   pendingRate,
 }: {
   current: UnitSize;
   currentRateCents: number;
+  visitsPerPeriod: number;
   pendingRate: MemberOverview["pendingRate"];
 }) {
+  // Their own tier's rates, not the headline ones. A once-a-month member
+  // reading the twice-a-month prices here would pick a size expecting one
+  // number and be charged another.
+  const frequency = frequencyForVisits(visitsPerPeriod) ?? "twice_monthly";
   const [choice, setChoice] = useState<UnitSize>(current);
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
@@ -253,6 +267,9 @@ function SizeChooser({
       <p className="text-sm font-medium text-muted">Your membership</p>
       <p className="mt-1 text-body">
         {unitSizeLabel(current)}, {formatCents(currentRateCents)} a month
+      </p>
+      <p className="mt-1 text-sm text-muted">
+        {membershipTier(frequency).label}
       </p>
 
       {pendingRate && (
@@ -284,7 +301,7 @@ function SizeChooser({
               <span className="font-medium text-body">{size.label}</span>
             </span>
             <span className="text-muted">
-              {formatCents(MEMBERSHIP_PRICES[size.id].monthlyCents)} a month
+              {formatCents(membershipPrice(frequency, size.id).monthlyCents)} a month
             </span>
           </label>
         ))}

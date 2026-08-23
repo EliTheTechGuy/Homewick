@@ -3,7 +3,7 @@ import Image from "next/image";
 import { ButtonLink, Card, CheckIcon, Section, SectionHeading } from "@/components/ui";
 import { MembershipCards } from "@/components/MembershipCards";
 import { AddOnList } from "@/components/AddOnList";
-import { MEMBER_BENEFITS, SERVICE_PRICES, SERVICE_TYPES } from "@/lib/pricing";
+import { MEMBERSHIP_TIERS, SERVICE_PRICES, SERVICE_TYPES } from "@/lib/pricing";
 import { site } from "@/lib/site";
 
 /**
@@ -158,16 +158,18 @@ export default function HomePage() {
       <Section tinted>
         <SectionHeading
           eyebrow="Or join the membership"
-          title="Cleaning twice a month, handled for you."
-          lead="For places that need it regularly. Two cleanings a month on one charge, at 15% less than booking them one at a time."
+          title="Cleaning on a schedule, handled for you."
+          lead="For places that need it regularly. Once or twice a month on one charge, booked and billed without you thinking about it."
           centered
         />
         <MembershipCards className="mt-12" />
         <div className="mx-auto mt-12 max-w-3xl">
           <Card>
-            <h3 className="text-lg font-semibold text-navy">What membership includes</h3>
+            <h3 className="text-lg font-semibold text-navy">
+              What the twice-a-month membership includes
+            </h3>
             <ul className="mt-4 grid gap-3 sm:grid-cols-2">
-              {MEMBER_BENEFITS.map((b) => (
+              {MEMBERSHIP_TIERS.twice_monthly.benefits.map((b) => (
                 <li key={b} className="flex gap-3 text-sm leading-relaxed text-body">
                   <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
                   <span>{b}</span>
@@ -175,7 +177,7 @@ export default function HomePage() {
               ))}
             </ul>
             <p className="mt-5 border-t border-hairline pt-4 text-sm text-muted">
-              Two cleanings per billing period. Unused visits do not roll over.{" "}
+              Unused visits do not roll over, on either membership.{" "}
               <Link href="/membership" className="font-medium text-accent hover:underline">
                 Read the membership terms
               </Link>

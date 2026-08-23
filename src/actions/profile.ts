@@ -9,8 +9,9 @@ import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { formatLong, today, type ISODate } from "@/lib/dates";
 import { nextPeriod, periodContaining } from "@/lib/membership-lifecycle";
 import {
-  MEMBERSHIP_PRICES,
   UNIT_SIZES,
+  frequencyForVisits,
+  membershipPrice,
   unitSizeLabel,
   type UnitSize,
 } from "@/lib/pricing";
@@ -238,7 +239,19 @@ export async function changeMembershipSize(newSize: unknown): Promise<Result> {
         };
       }
 
-      const newRate = MEMBERSHIP_PRICES[size.data].monthlyCents;
+      // Repriced onto their own tier, not onto the headline one. A once-a-month
+      // member moving from a 2 bed to a 3 bed owes the once-a-month 3 bed rate.
+      // Looking the rate up by size alone would have moved them to $369 for a
+      // single cleaning a month, and the first they would know is the invoice.
+      const frequency = frequencyForVisits(sub.visits_per_period);
+      if (!frequency) {
+        return {
+          ok: false as const,
+          message:
+            "Your membership was arranged with us directly, so it is not on the published sizes. Get in touch and we will sort it.",
+        };
+      }
+      const newRate = membershipPrice(frequency, size.data).monthlyCents;
 
       // Built once and shared, so the period this change lands in and the
       // period after it are measured against the same subscription. Passing
@@ -287,6 +300,7 @@ export async function changeMembershipSize(newSize: unknown): Promise<Result> {
         effectiveOn,
         newRate,
         size: size.data,
+        frequency,
       };
     });
 
@@ -299,7 +313,7 @@ export async function changeMembershipSize(newSize: unknown): Promise<Result> {
         const existing = await s.subscriptions.retrieve(outcome.stripeSubscriptionId);
         const item = existing.items.data[0];
         if (item) {
-          const productId = await membershipProductId(outcome.size);
+          const productId = await membershipProductId(outcome.size, outcome.frequency);
 
           await s.subscriptions.update(outcome.stripeSubscriptionId, {
             items: [

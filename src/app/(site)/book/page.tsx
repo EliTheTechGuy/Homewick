@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { BookingForm } from "@/components/BookingForm";
 import { Section } from "@/components/ui";
-import type { UnitSize } from "@/lib/pricing";
+import { MEMBERSHIP_FREQUENCIES, type MembershipFrequency, type UnitSize } from "@/lib/pricing";
 
 export const metadata: Metadata = {
   title: "Book online",
@@ -21,9 +21,9 @@ const SIZES: UnitSize[] = ["studio_1br", "2br_2ba", "3br_2ba"];
 export default async function BookPage({
   searchParams,
 }: {
-  searchParams: Promise<{ plan?: string; size?: string }>;
+  searchParams: Promise<{ plan?: string; size?: string; freq?: string }>;
 }) {
-  const { plan, size } = await searchParams;
+  const { plan, size, freq } = await searchParams;
 
   return (
     <Section>
@@ -38,6 +38,11 @@ export default async function BookPage({
       <BookingForm
         initialPlan={plan === "membership" ? "membership" : "one_time"}
         initialSize={SIZES.includes(size as UnitSize) ? (size as UnitSize) : "2br_2ba"}
+        initialFrequency={
+          MEMBERSHIP_FREQUENCIES.includes(freq as MembershipFrequency)
+            ? (freq as MembershipFrequency)
+            : "twice_monthly"
+        }
       />
     </Section>
   );

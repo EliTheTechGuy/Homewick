@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { query, queryOne } from "@/lib/db";
 import { TIMEZONE } from "@/lib/dates";
-import type { ServiceType, UnitSize } from "@/lib/pricing";
+import {
+  frequencyForVisits,
+  membershipTier,
+  type ServiceType,
+  type UnitSize,
+} from "@/lib/pricing";
 import { sendOnce } from "@/lib/emails/send-once";
 import {
   membershipWelcomeEmail,
@@ -326,13 +331,15 @@ async function sendMembershipWelcome(
       email: string;
       unit_size: UnitSize;
       monthly_amount_cents: number;
+      visits_per_period: number;
+      interval_days: number | null;
       line1: string;
       line2: string | null;
       city: string;
       postal_code: string;
     }>(
       `select c.id as customer_id, c.first_name, c.email::text as email,
-              s.unit_size, s.monthly_amount_cents,
+              s.unit_size, s.monthly_amount_cents, s.visits_per_period, s.interval_days,
               p.line1, p.line2, p.city, p.postal_code
          from subscriptions s
          join customers c on c.id = s.customer_id
@@ -351,6 +358,12 @@ async function sendMembershipWelcome(
       [subscriptionId, TIMEZONE],
     );
 
+    // What this membership actually includes, read from the subscription. A
+    // hand-agreed cadence belongs to no published tier, and gets the plain
+    // version rather than another tier's promises.
+    const frequency =
+      row.interval_days == null ? frequencyForVisits(row.visits_per_period) : null;
+
     await sendOnce({
       eventKey: eventId,
       kind: "membership_welcome",
@@ -359,6 +372,8 @@ async function sendMembershipWelcome(
       message: membershipWelcomeEmail({
         firstName: row.first_name,
         unitSize: row.unit_size,
+        visitsPerPeriod: row.visits_per_period,
+        freeAddOn: frequency ? membershipTier(frequency).freeAddOn : false,
         monthlyAmountCents: row.monthly_amount_cents,
         firstPaymentCents: session.amount_total ?? 0,
         visitDates: visits.map((v) => v.on_date),
