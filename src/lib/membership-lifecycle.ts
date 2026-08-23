@@ -374,11 +374,48 @@ export function rateForPeriod(sub: SubscriptionRow, period: Period): number {
   return sub.monthly_amount_cents;
 }
 
+/**
+ * Close every membership whose end date has arrived.
+ *
+ * A membership past its end date is over, whatever else is true. Until now the
+ * only thing that closed one was Stripe's subscription deleted webhook. That
+ * is the usual path and it fires at the right moment, but it is somebody
+ * else's system: a webhook that fails, or a membership with no Stripe
+ * subscription behind it, and the row sits in pending_cancellation for ever.
+ * The booking form counts that as a live membership, so the customer is
+ * refused when they try to come back, which is exactly the moment you least
+ * want to refuse anybody.
+ *
+ * ends_on is the first day no longer covered, so a subscription that has
+ * reached it has already delivered everything it owed.
+ */
+export async function closeEndedMemberships(
+  client: PoolClient,
+  from: ISODate = today(),
+): Promise<number> {
+  const closed = await client.query(
+    `update subscriptions
+        set status = 'canceled', updated_at = now()
+      where status = 'pending_cancellation'
+        and ends_on is not null
+        and ends_on <= $1::date`,
+    [from],
+  );
+  return closed.rowCount ?? 0;
+}
+
 /** The daily cron entry point. Safe to run repeatedly. */
 export async function generateUpcomingVisits(
   from: ISODate = today(),
-): Promise<{ subscriptions: number; periodsCreated: number; visitsCreated: number }> {
+): Promise<{
+  subscriptions: number;
+  periodsCreated: number;
+  visitsCreated: number;
+  membershipsClosed: number;
+}> {
   return transaction(async (client) => {
+    const membershipsClosed = await closeEndedMemberships(client, from);
+
     // Settle any rate change whose date has arrived, before anything reads a
     // rate. Nothing did this before, so pending_amount_cents sat there for
     // ever and monthly_amount_cents kept the signup price. A member who
@@ -421,7 +458,7 @@ export async function generateUpcomingVisits(
       visitsCreated += result.visitsCreated;
     }
 
-    return { subscriptions: subs.length, periodsCreated, visitsCreated };
+    return { subscriptions: subs.length, periodsCreated, visitsCreated, membershipsClosed };
   });
 }
 

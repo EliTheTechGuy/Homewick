@@ -8,8 +8,10 @@ import { sendOnce } from "./send-once";
 import {
   feedbackRequestEmail,
   freeAddOnNudgeEmail,
+  membershipEndedEmail,
   visitReminderEmail,
 } from "./templates";
+import { MEMBERSHIP_FREQUENCIES, MEMBERSHIP_TIERS } from "../pricing";
 
 /**
  * The email the daily job sends.
@@ -24,6 +26,7 @@ export type ScheduledEmailResult = {
   remindersSent: number;
   nudgesSent: number;
   feedbackSent: number;
+  endedSent: number;
   skipped?: string;
 };
 
@@ -45,6 +48,26 @@ const SEND_UNTIL_HOUR = 11;
 /** How far into a billing period to wait before nudging about the free add-on. */
 const NUDGE_AFTER_DAYS = 2;
 
+/**
+ * How far back to look for work a run may have missed.
+ *
+ * A cron that fails, or a mail provider having a bad morning, must not lose a
+ * message permanently. Yesterday's query asked about yesterday and moved on.
+ */
+export const CATCH_UP_DAYS = 7;
+
+/**
+ * The period sizes that come with a free add-on, read from the catalog.
+ *
+ * Written as a list rather than a hard-coded 2 so that the tier definition
+ * stays the only place this is decided. A once-a-month member has no free
+ * add-on, and nudging them every month to claim one would be promising
+ * something the booking form correctly refuses to give.
+ */
+export const FREE_ADD_ON_VISIT_COUNTS = MEMBERSHIP_FREQUENCIES.filter(
+  (f) => MEMBERSHIP_TIERS[f].freeAddOn,
+).map((f) => MEMBERSHIP_TIERS[f].visitsPerPeriod);
+
 export async function sendScheduledEmails(
   from: ISODate = today(),
   hourNow: number = localHour(),
@@ -54,6 +77,7 @@ export async function sendScheduledEmails(
       remindersSent: 0,
       nudgesSent: 0,
       feedbackSent: 0,
+      endedSent: 0,
       skipped: `local hour ${hourNow} is outside the ${SEND_FROM_HOUR} to ${SEND_UNTIL_HOUR} window`,
     };
   }
@@ -61,7 +85,90 @@ export async function sendScheduledEmails(
   const remindersSent = await sendVisitReminders(from);
   const nudgesSent = await sendFreeAddOnNudges(from);
   const feedbackSent = await sendFeedbackRequests();
-  return { remindersSent, nudgesSent, feedbackSent };
+  const endedSent = await sendMembershipEndedNotices(from);
+  return { remindersSent, nudgesSent, feedbackSent, endedSent };
+}
+
+/**
+ * The morning a membership is actually over.
+ *
+ * The cancellation email goes out the day somebody cancels, which can be six
+ * weeks before the end date it quotes. By the time that date arrives it has
+ * been forgotten, so the last cleaning happens and nothing marks the end. This
+ * is the message that closes it off and asks whether they want to come back.
+ *
+ * Deliberately narrow about who counts:
+ *
+ *   ends_on has arrived, and it is the first day no longer covered, so on this
+ *   morning the membership really is over rather than nearly over.
+ *
+ *   stripe_subscription_id is not null, which is only set once a payment
+ *   succeeded. An abandoned signup is closed with status canceled and an
+ *   ends_on of today, and telling somebody their membership has ended when
+ *   they never had one is a strange message to receive.
+ *
+ *   the nudge opt-out is honoured, because this is a commercial message rather
+ *   than a receipt.
+ */
+/**
+ * Exported so the schema test can run this exact statement against a real
+ * Postgres. Everything that keeps the wrong person from being told their
+ * membership has ended is in these where clauses, and a test that retyped them
+ * would only prove the copy works.
+ */
+export const ENDED_MEMBERSHIPS_SQL = `select s.id as subscription_id, c.id as customer_id, c.first_name,
+            c.email::text as email, s.ends_on::text as ends_on,
+            (select (v.scheduled_for at time zone $3)::date::text
+               from visits v
+              where v.subscription_id = s.id and v.status = 'completed'
+              order by v.scheduled_for desc
+              limit 1) as last_visit
+       from subscriptions s
+       join customers c on c.id = s.customer_id
+      where s.ends_on is not null
+        and s.ends_on <= $1::date
+        and s.ends_on > ($1::date - $2::int)
+        and s.status in ('canceled', 'pending_cancellation')
+        and s.stripe_subscription_id is not null
+        and c.nudge_opt_out_at is null`;
+
+async function sendMembershipEndedNotices(from: ISODate): Promise<number> {
+  const ended = await query<{
+    subscription_id: string;
+    customer_id: string;
+    first_name: string;
+    email: string;
+    ends_on: string;
+    last_visit: string | null;
+  }>(ENDED_MEMBERSHIPS_SQL, [from, CATCH_UP_DAYS, TIMEZONE]);
+
+  let sent = 0;
+  for (const row of ended) {
+    const result = await sendOnce({
+      // Keyed on the subscription, not the day, so the catch-up window cannot
+      // send a second copy to somebody who already got one.
+      eventKey: `membership_ended:${row.subscription_id}`,
+      kind: "membership_ended",
+      to: row.email,
+      customerId: row.customer_id,
+      message: membershipEndedEmail({
+        firstName: row.first_name,
+        endedOn: row.ends_on,
+        lastVisit: row.last_visit,
+        unsubscribeUrl: unsubscribeUrl(site.url, row.customer_id),
+      }),
+    }).catch((err) => {
+      console.error(
+        `[email] end of membership notice failed for ${row.subscription_id}`,
+        err,
+      );
+      return { sent: false as const };
+    });
+
+    if (result.sent) sent++;
+  }
+
+  return sent;
 }
 
 /**
@@ -223,15 +330,8 @@ async function sendVisitReminders(from: ISODate): Promise<number> {
  * been charged, and nudging when no visit remains would send them to a page
  * that cannot help.
  */
-async function sendFreeAddOnNudges(from: ISODate): Promise<number> {
-  const periods = await query<{
-    period_id: string;
-    customer_id: string;
-    first_name: string;
-    email: string;
-    next_visit: string;
-  }>(
-    `select sp.id as period_id, c.id as customer_id, c.first_name,
+/** Exported for the schema test, for the same reason as the statement above. */
+export const FREE_ADD_ON_NUDGE_SQL = `select sp.id as period_id, c.id as customer_id, c.first_name,
             c.email::text as email,
             (v.scheduled_for at time zone $3)::date::text as next_visit
        from subscription_periods sp
@@ -246,10 +346,30 @@ async function sendFreeAddOnNudges(from: ISODate): Promise<number> {
        ) v on true
       where s.status in ('active', 'pending_cancellation')
         and c.nudge_opt_out_at is null
+        -- Only tiers that actually include a free add-on. Nothing marks a
+        -- period as having no perk to claim, so free_addon_used stays false
+        -- for ever on a tier without one, and this query would have offered a
+        -- once-a-month member a free oven clean every single month that the
+        -- booking form and the checkout both correctly refuse to give them.
+        --
+        -- A cadence agreed by hand is excluded for the same reason. Those are
+        -- priced individually and no free add-on was ever part of the deal.
+        and s.interval_days is null
+        and s.visits_per_period = any($4::int[])
         and sp.free_addon_used = false
         and sp.period_start <= ($1::date - $2::int)
-        and sp.period_end > $1::date`,
-    [from, NUDGE_AFTER_DAYS, TIMEZONE],
+        and sp.period_end > $1::date`;
+
+async function sendFreeAddOnNudges(from: ISODate): Promise<number> {
+  const periods = await query<{
+    period_id: string;
+    customer_id: string;
+    first_name: string;
+    email: string;
+    next_visit: string;
+  }>(
+    FREE_ADD_ON_NUDGE_SQL,
+    [from, NUDGE_AFTER_DAYS, TIMEZONE, FREE_ADD_ON_VISIT_COUNTS],
   );
 
   let sent = 0;
