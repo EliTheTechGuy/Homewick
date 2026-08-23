@@ -1008,3 +1008,205 @@ test("a once-a-month membership generates one cleaning per period, not two", asy
     "a once-a-month signup must not quietly hand out a deep clean",
   );
 });
+
+// --- Telling somebody their membership is over -------------------------
+
+test("the end-of-membership notice reaches the members it should, and nobody else", async () => {
+  const { ENDED_MEMBERSHIPS_SQL, CATCH_UP_DAYS } = await import("./emails/scheduled");
+  const today = "2026-06-01";
+
+  // Ended yesterday, paid for, still awaiting Stripe's confirmation. This is
+  // the one that should be told.
+  const ending = await seedCustomer("ended@example.com");
+  const endedId = await insertSubscription(
+    ending.customerId,
+    ending.propertyId,
+    "2026-01-15",
+    15,
+  );
+  await db.query(
+    `update subscriptions
+        set status = 'pending_cancellation', ends_on = $2::date,
+            stripe_subscription_id = 'sub_paid'
+      where id = $1`,
+    [endedId, today],
+  );
+
+  // Never paid. An abandoned signup is closed with an ends_on of today, and
+  // telling somebody their membership has ended when they never had one is a
+  // strange message to receive.
+  const abandoned = await seedCustomer("abandoned@example.com");
+  const abandonedId = await insertSubscription(
+    abandoned.customerId,
+    abandoned.propertyId,
+    "2026-01-15",
+    15,
+  );
+  await db.query(
+    `update subscriptions set status = 'canceled', ends_on = $2::date where id = $1`,
+    [abandonedId, today],
+  );
+
+  // Paid, ended, but has asked not to be marketed at. This message asks for
+  // their business back, so the opt-out applies.
+  const optedOut = await seedCustomer("optedout@example.com");
+  const optedOutId = await insertSubscription(
+    optedOut.customerId,
+    optedOut.propertyId,
+    "2026-01-15",
+    15,
+  );
+  await db.query(
+    `update subscriptions
+        set status = 'canceled', ends_on = $2::date, stripe_subscription_id = 'sub_out'
+      where id = $1`,
+    [optedOutId, today],
+  );
+  await db.query(`update customers set nudge_opt_out_at = now() where id = $1`, [
+    optedOut.customerId,
+  ]);
+
+  // Still running. Their end date is a fortnight away and they are mid-notice.
+  const future = await seedCustomer("future@example.com");
+  const futureId = await insertSubscription(
+    future.customerId,
+    future.propertyId,
+    "2026-01-15",
+    15,
+  );
+  await db.query(
+    `update subscriptions
+        set status = 'pending_cancellation', ends_on = '2026-06-15',
+            stripe_subscription_id = 'sub_future'
+      where id = $1`,
+    [futureId],
+  );
+
+  // Ended long ago, before the catch-up window. A run that has been broken for
+  // a month must not send a pile of these the day it is fixed.
+  const old = await seedCustomer("longgone@example.com");
+  const oldId = await insertSubscription(old.customerId, old.propertyId, "2025-01-15", 15);
+  await db.query(
+    `update subscriptions
+        set status = 'canceled', ends_on = '2026-01-15', stripe_subscription_id = 'sub_old'
+      where id = $1`,
+    [oldId],
+  );
+
+  const { rows } = await db.query<{ subscription_id: string; ends_on: string }>(
+    ENDED_MEMBERSHIPS_SQL,
+    [today, CATCH_UP_DAYS, "America/Chicago"],
+  );
+
+  assert.deepEqual(
+    rows.map((r) => r.subscription_id),
+    [endedId],
+    "only the paid membership that has actually ended, inside the catch-up window",
+  );
+  assert.equal(rows[0].ends_on, today);
+});
+
+test("the free add-on nudge skips tiers that have no free add-on", async () => {
+  const { FREE_ADD_ON_NUDGE_SQL, FREE_ADD_ON_VISIT_COUNTS } = await import(
+    "./emails/scheduled"
+  );
+  // Dated ahead of the real clock on purpose. The lateral join asks for the
+  // next visit with now(), not with the date passed in, so a period in the
+  // past matches nothing and the test would pass for the wrong reason.
+  const today = "2027-06-10";
+
+  // A period, a scheduled visit inside it, and no perk claimed. Everything the
+  // nudge looks for, varying only the tier.
+  async function memberDue(email: string, visitsPerPeriod: number, intervalDays: number | null) {
+    const { customerId, propertyId } = await seedCustomer(email);
+    const id = await insertSubscription(customerId, propertyId, "2027-06-01", 1);
+    await db.query(
+      `update subscriptions
+          set status = 'active', visits_per_period = $2, interval_days = $3
+        where id = $1`,
+      [id, visitsPerPeriod, intervalDays],
+    );
+    const period = await db.query<{ id: string }>(
+      `insert into subscription_periods
+         (subscription_id, period_start, period_end, visits_allotted, amount_cents)
+       values ($1, '2027-06-01', '2027-07-01', $2, 26900) returning id`,
+      [id, visitsPerPeriod],
+    );
+    await db.query(
+      `insert into visits (customer_id, property_id, subscription_id, period_id,
+                           origin, service_type, status, scheduled_for)
+       values ($1, $2, $3, $4, 'membership', 'standard', 'scheduled',
+               '2027-06-20 09:00-05')`,
+      [customerId, propertyId, id, period.rows[0].id],
+    );
+    return id;
+  }
+
+  const twice = await memberDue("nudge-twice@example.com", 2, null);
+  await memberDue("nudge-once@example.com", 1, null);
+  await memberDue("nudge-custom@example.com", 2, 21);
+
+  const { rows } = await db.query<{ period_id: string }>(FREE_ADD_ON_NUDGE_SQL, [
+    today,
+    2,
+    "America/Chicago",
+    FREE_ADD_ON_VISIT_COUNTS,
+  ]);
+
+  const nudged = await db.query<{ subscription_id: string }>(
+    `select subscription_id from subscription_periods where id = any($1::uuid[])`,
+    [rows.map((r) => r.period_id)],
+  );
+
+  assert.deepEqual(
+    nudged.rows.map((r) => r.subscription_id),
+    [twice],
+    "a once-a-month member has no free add-on, and a hand-agreed cadence never had one",
+  );
+});
+
+test("a membership past its end date is closed, so the customer can come back", async () => {
+  const { closeEndedMemberships } = await import("./membership-lifecycle");
+  const today = "2026-06-01";
+
+  const done = await seedCustomer("closeme@example.com");
+  const doneId = await insertSubscription(done.customerId, done.propertyId, "2026-01-15", 15);
+  await db.query(
+    `update subscriptions set status = 'pending_cancellation', ends_on = $2::date where id = $1`,
+    [doneId, today],
+  );
+
+  // Mid-notice. Their last period is still running and still owes cleanings.
+  const notice = await seedCustomer("stillrunning@example.com");
+  const noticeId = await insertSubscription(
+    notice.customerId,
+    notice.propertyId,
+    "2026-01-15",
+    15,
+  );
+  await db.query(
+    `update subscriptions
+        set status = 'pending_cancellation', ends_on = '2026-06-20' where id = $1`,
+    [noticeId],
+  );
+
+  // At least this one. The database is shared across tests in this file, so
+  // an exact count would be an assertion about the other tests.
+  const closed = await closeEndedMemberships(asClient(db), today);
+  assert.ok(closed >= 1);
+
+  const states = await db.query<{ id: string; status: string }>(
+    `select id, status::text as status from subscriptions where id = any($1::uuid[])`,
+    [[doneId, noticeId]],
+  );
+  const byId = new Map(states.rows.map((r) => [r.id, r.status]));
+  assert.equal(byId.get(doneId), "canceled", "its end date has arrived");
+  assert.equal(
+    byId.get(noticeId),
+    "pending_cancellation",
+    "cancelling early must not end the period they have already paid for",
+  );
+
+  // Running twice changes nothing, which matters because the cron retries.
+  assert.equal(await closeEndedMemberships(asClient(db), today), 0);
+});

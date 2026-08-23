@@ -202,6 +202,54 @@ export function cancellationConfirmedEmail(params: {
 }
 
 /**
+ * The morning the membership is actually over.
+ *
+ * The cancellation email goes out the day somebody cancels, and by then the
+ * end date can be six weeks away. Everything it said is forgotten by the time
+ * it happens, so the last cleaning comes and goes and nothing marks the end.
+ *
+ * This is the one that says it is done and asks whether they want us back. It
+ * is a commercial message rather than a receipt, which is why it carries an
+ * unsubscribe link and why the opt-out is honoured before it is sent.
+ *
+ * Kept short. It closes something off warmly and makes coming back easy, and
+ * anything more reads as trying to talk somebody out of a decision they have
+ * already made.
+ */
+export function membershipEndedEmail(params: {
+  firstName: string;
+  endedOn: ISODate;
+  lastVisit: ISODate | null;
+  unsubscribeUrl?: string;
+}): Composed {
+  const rows: Row[] = [
+    { label: "Membership ended", value: formatLong(params.endedOn) },
+  ];
+  if (params.lastVisit) {
+    rows.push({ label: "Last cleaning", value: formatLong(params.lastVisit) });
+  }
+
+  return compose({
+    subject: "Your Homewick membership has ended",
+    heading: `Thanks for having us, ${params.firstName}`,
+    intro:
+      "Your membership has come to an end and there is nothing further to pay. It was good to look after your place.",
+    rows,
+    body: [
+      "If you would like us back, you can start again whenever it suits. Once a month or twice a month, whichever fits how you actually use the place.",
+      "One-time cleans are always there too, at the published rate, with no membership involved.",
+    ],
+    cta: { label: "Start a new membership", url: `${site.url}/membership` },
+    // Not "just reply". The layout footer says plainly that replies are not
+    // read, and an email that contradicts its own footer two lines later is
+    // how you teach somebody to ignore both.
+    footerNote:
+      "If something went wrong and that is why you left, we would genuinely like to know. The address below comes straight to us.",
+    unsubscribeUrl: params.unsubscribeUrl,
+  });
+}
+
+/**
  * Membership started, first payment taken.
  *
  * This is the email that has to earn the subscription. It explains the things
