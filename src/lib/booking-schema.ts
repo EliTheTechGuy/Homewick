@@ -1,7 +1,7 @@
 import { z } from "zod";
 import {
   ADD_ONS,
-  DEEP_CLEAN_INCLUDES,
+  includedAddOnCodes,
   FREE_PERK_ELIGIBLE,
   MEMBERSHIP_FREQUENCIES,
   PET_SURCHARGE_CENTS,
@@ -216,7 +216,7 @@ export function quoteFor(input: QuoteParams): Quote {
   const codes = [
     ...new Set([
       ...input.addOns,
-      ...(input.serviceType === "deep" ? DEEP_CLEAN_INCLUDES : []),
+      ...includedAddOnCodes(input.serviceType),
     ]),
   ];
 
