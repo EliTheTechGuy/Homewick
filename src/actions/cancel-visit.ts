@@ -187,6 +187,7 @@ async function cancel(
         onDate: visit.on_date,
         refundCents: money.refundCents,
         feeCents: money.feeCents,
+        tier: money.tier,
       }),
     }).catch((err) => {
       console.error(`[email] cancellation notice failed for visit ${visit.id}`, err);
@@ -204,9 +205,11 @@ async function cancel(
           : `${formatCents(money.refundCents)} is owed back and we are sorting it out.`;
 
     const feeLine =
-      money.feeCents > 0
-        ? ` A ${formatCents(money.feeCents)} late cancellation fee applies because it was inside 48 hours.`
-        : "";
+      money.tier === "half"
+        ? ` Half the price, ${formatCents(money.feeCents)}, is kept because it was inside 48 hours.`
+        : money.tier === "full"
+          ? ` It was inside 24 hours, so the full ${formatCents(money.feeCents)} is kept.`
+          : "";
 
     return { ok: true, message: `That cleaning is cancelled. ${refundLine}${feeLine}` };
   } catch (err) {

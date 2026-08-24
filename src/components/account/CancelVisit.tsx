@@ -27,7 +27,7 @@ export function CancelVisit({ visit }: { visit: UpcomingVisit }) {
 
   if (!visit.isOneOff || !visit.cancellation) return null;
 
-  const { refundCents, feeCents } = visit.cancellation;
+  const { refundCents, feeCents, tier } = visit.cancellation;
 
   function cancel() {
     startTransition(async () => {
@@ -66,19 +66,29 @@ export function CancelVisit({ visit }: { visit: UpcomingVisit }) {
 
   return (
     <div className="mt-2 w-full rounded-xl bg-panel p-4">
+      {/* Three outcomes, each said plainly with the reason attached. The one
+          that refunds nothing is the one worth writing carefully: somebody
+          who taps through it without understanding is somebody who calls the
+          bank rather than us. */}
       <p className="text-sm leading-relaxed text-body">
-        {feeCents > 0 ? (
-          <>
-            This is inside 48 hours, so a{" "}
-            <strong>{formatCents(feeCents)} late cancellation fee</strong> applies.{" "}
-            {refundCents > 0
-              ? `You get ${formatCents(refundCents)} back.`
-              : "There is nothing left to refund."}
-          </>
-        ) : (
+        {tier === "free" && (
           <>
             You get the full <strong>{formatCents(refundCents)}</strong> back. Refunds
             take a few working days to reach your card.
+          </>
+        )}
+        {tier === "half" && (
+          <>
+            This is inside 48 hours, so half the price is kept and{" "}
+            <strong>{formatCents(refundCents)}</strong> comes back to you. Cancel more
+            than 48 hours ahead next time and there is no fee at all.
+          </>
+        )}
+        {tier === "full" && (
+          <>
+            This is inside 24 hours, so <strong>there is no refund</strong>. The
+            cleaner is already booked for it and the slot cannot be filled this late.
+            If something has gone wrong, keep the booking and get in touch instead.
           </>
         )}
       </p>

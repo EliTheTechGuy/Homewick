@@ -1,5 +1,6 @@
 import { emailLayout, emailText, type Row } from "./layout";
 import { formatLong, type ISODate } from "../dates";
+import type { CancellationTier } from "../cancellation";
 import { formatCents } from "../money";
 import { site } from "../site";
 import { serviceTypeLabel, unitSizeLabel, type ServiceType, type UnitSize } from "../pricing";
@@ -224,6 +225,7 @@ export function visitCanceledEmail(params: {
   onDate: ISODate;
   refundCents: number;
   feeCents: number;
+  tier: CancellationTier;
 }): Composed {
   const rows: Row[] = [
     { label: "Was booked for", value: formatLong(params.onDate) },
@@ -244,11 +246,24 @@ export function visitCanceledEmail(params: {
       "The refund goes back to the card you paid with. Banks usually take a few working days to show it, and it may appear as a separate line rather than as the original charge disappearing.",
     );
   }
-  if (params.feeCents > 0) {
+
+  // The reason travels with the number. A deduction that turns up on a
+  // statement with nothing attached to it is how an ordinary cancellation
+  // becomes a call to the bank instead of a call to us.
+  if (params.tier === "half") {
     body.push(
-      `The ${formatCents(params.feeCents)} fee applies because this was called off inside 48 hours. By then the slot has gone and a cleaner has usually already been told to be there.`,
+      `Half the price is kept when a clean is called off inside 48 hours. By then the day is set aside and a cleaner has usually been told to be there. Cancel more than 48 hours ahead and there is no fee at all.`,
     );
   }
+  if (params.tier === "full") {
+    body.push(
+      "Inside 24 hours a cleaning is not refunded. The cleaner is already booked for it and the slot cannot be filled that late, so it is paid for either way.",
+    );
+    body.push(
+      "If you think that is wrong in this case, get in touch and tell us what happened. We would rather hear it from you.",
+    );
+  }
+
   body.push("Book again whenever you like. Nothing here stops you.");
 
   return compose({

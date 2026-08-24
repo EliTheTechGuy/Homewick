@@ -2,7 +2,7 @@ import { query, queryOne } from "./db";
 import { TIMEZONE, today } from "./dates";
 import type { UnitSize } from "./pricing";
 import { cancellationEndDate } from "./membership-lifecycle";
-import { cancellationFor } from "./cancellation";
+import { cancellationFor, type CancellationTier } from "./cancellation";
 
 /** Everything the member's account page renders, in two queries. */
 
@@ -26,7 +26,11 @@ function cancellationFields(v: {
   });
   return {
     isOneOff: true,
-    cancellation: { refundCents: money.refundCents, feeCents: money.feeCents },
+    cancellation: {
+      refundCents: money.refundCents,
+      feeCents: money.feeCents,
+      tier: money.tier,
+    },
   };
 }
 
@@ -53,7 +57,11 @@ export type UpcomingVisit = {
    * Worked out here rather than in the browser so the number somebody agrees
    * to is the number the server will use.
    */
-  cancellation: { refundCents: number; feeCents: number } | null;
+  cancellation: {
+    refundCents: number;
+    feeCents: number;
+    tier: CancellationTier;
+  } | null;
 };
 
 export type MemberOverview = {

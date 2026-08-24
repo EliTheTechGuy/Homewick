@@ -6,34 +6,42 @@
  * refund: give back everything except the fee. That matters more than it
  * sounds. Charging a card after the fact means storing it, charging it
  * off-session, and losing the argument when the authentication fails or the
- * customer disputes a payment they did not expect. Keeping part of a payment
- * they already authorised has none of that.
+ * customer disputes a payment they did not expect. Keeping part of one they
+ * already authorised has none of that.
  *
  * Memberships do not come through here. A membership period is paid in
  * advance and is not refunded on a partial basis, which the service agreement
  * has always said, so the fee is already built into how it works.
  */
 
-/** Notice needed to call off a clean and get everything back. */
-export const CANCELLATION_NOTICE_HOURS = 48;
+/** Notice that costs nothing. */
+export const FREE_CANCELLATION_HOURS = 48;
+
+/** Below this, the visit is not refunded at all. */
+export const NO_REFUND_HOURS = 24;
 
 /**
- * Kept when a clean is called off inside that window.
+ * The share of the visit kept at each level of notice.
  *
- * Flat rather than a percentage, deliberately. Half of a $280 deep clean is
- * $140, and a number that size is what turns an awkward phone call into a
- * chargeback, which costs more than the fee and takes the payment with it.
- * Flat is also the only version somebody can repeat back to you correctly.
- *
- * It is roughly a cleaner's trip. Inside two days the slot is gone and
- * somebody has usually already been told to be there.
+ * A share rather than a flat amount, so the fee tracks the size of the job.
+ * Calling off a $110 studio the night before costs less than calling off a
+ * $399 move-out, which is the right shape: what is lost is the visit, and the
+ * visits are not worth the same.
  */
-export const LATE_CANCELLATION_FEE_CENTS = 4000;
+export const CANCELLATION_FEE_RATES = {
+  /** 48 hours or more. */
+  free: 0,
+  /** Between 24 and 48 hours. */
+  half: 0.5,
+  /** Under 24 hours, including a lockout on the day. */
+  full: 1,
+} as const;
+
+export type CancellationTier = keyof typeof CANCELLATION_FEE_RATES;
 
 export type Cancellation = {
-  /** Whether this is inside the notice window. */
-  late: boolean;
-  /** Kept by us. Zero when there is enough notice. */
+  tier: CancellationTier;
+  /** Kept by us. */
   feeCents: number;
   /** Given back to the customer. */
   refundCents: number;
@@ -47,6 +55,10 @@ export type Cancellation = {
  * Both times are absolute instants, so there is no timezone arithmetic to get
  * wrong here: a visit at 9am in Texas is one moment, and the question is only
  * how far away it is from now.
+ *
+ * A visit already in the past lands in the full tier, which is what a lockout
+ * is. The cleaner travelled, the hour is gone, and there is nothing left to
+ * resell.
  */
 export function cancellationFor(input: {
   /** What the customer actually paid for this visit. */
@@ -57,15 +69,21 @@ export function cancellationFor(input: {
   const hoursUntil = Math.floor(
     (input.scheduledFor.getTime() - input.now.getTime()) / 3_600_000,
   );
-  const late = hoursUntil < CANCELLATION_NOTICE_HOURS;
 
-  // The fee can never exceed what was paid. A $35 laundry-only visit called
-  // off late owes $35, not $40, and a refund cannot be negative: that would
-  // be an extra charge nobody agreed to.
-  const feeCents = late ? Math.min(LATE_CANCELLATION_FEE_CENTS, input.paidCents) : 0;
+  const tier: CancellationTier =
+    hoursUntil >= FREE_CANCELLATION_HOURS
+      ? "free"
+      : hoursUntil >= NO_REFUND_HOURS
+        ? "half"
+        : "full";
+
+  // Floored, so a half that does not divide evenly leaves the odd cent with
+  // the customer rather than with us. It is one cent, and it is the sort of
+  // thing that is only ever noticed when it went the wrong way.
+  const feeCents = Math.floor(input.paidCents * CANCELLATION_FEE_RATES[tier]);
 
   return {
-    late,
+    tier,
     feeCents,
     refundCents: input.paidCents - feeCents,
     hoursUntil,
