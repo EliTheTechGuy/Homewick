@@ -203,6 +203,68 @@ export function cancellationConfirmedEmail(params: {
 }
 
 /**
+ * A one-time clean called off, and what happened to the money.
+ *
+ * The refund is the point of the message. Somebody who cancels and hears
+ * nothing assumes they have been charged for nothing, and the next thing that
+ * happens is a chargeback rather than a question.
+ *
+ * The fee is stated with its reason rather than deducted quietly. A number
+ * that appears on a card statement with no explanation attached to it is how
+ * an ordinary cancellation becomes a dispute.
+ */
+export function visitCanceledEmail(params: {
+  firstName: string;
+  serviceType: ServiceType;
+  /**
+   * The local calendar date, formatted by Postgres rather than converted here.
+   * A timestamp turned into a date in JavaScript is how 9am became 4am in this
+   * codebase once already.
+   */
+  onDate: ISODate;
+  refundCents: number;
+  feeCents: number;
+}): Composed {
+  const rows: Row[] = [
+    { label: "Was booked for", value: formatLong(params.onDate) },
+    { label: "Service", value: serviceTypeLabel(params.serviceType) },
+  ];
+
+  if (params.feeCents > 0) {
+    rows.push({ label: "Late cancellation fee", value: formatCents(params.feeCents) });
+  }
+  rows.push({
+    label: "Refund",
+    value: params.refundCents > 0 ? formatCents(params.refundCents) : "None",
+  });
+
+  const body: string[] = [];
+  if (params.refundCents > 0) {
+    body.push(
+      "The refund goes back to the card you paid with. Banks usually take a few working days to show it, and it may appear as a separate line rather than as the original charge disappearing.",
+    );
+  }
+  if (params.feeCents > 0) {
+    body.push(
+      `The ${formatCents(params.feeCents)} fee applies because this was called off inside 48 hours. By then the slot has gone and a cleaner has usually already been told to be there.`,
+    );
+  }
+  body.push("Book again whenever you like. Nothing here stops you.");
+
+  return compose({
+    subject: "Your cleaning is cancelled",
+    heading: `That is cancelled, ${params.firstName}`,
+    intro:
+      "We have taken it off the schedule and nobody will be turning up. Here is where it leaves things.",
+    rows,
+    body,
+    cta: { label: "Book another clean", url: `${site.url}/book` },
+    footerNote:
+      "If you did not ask for this, get in touch straight away and we will put it back.",
+  });
+}
+
+/**
  * A booking entered by hand in admin, waiting on the customer's card.
  *
  * Admin used to be handed the raw Stripe URL to copy and forward itself. That

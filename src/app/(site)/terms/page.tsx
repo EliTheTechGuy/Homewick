@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import { Section } from "@/components/ui";
 import { formatCents } from "@/lib/money";
 import { MEMBERSHIP_TIERS, PET_SURCHARGE_CENTS } from "@/lib/pricing";
+import {
+  CANCELLATION_NOTICE_HOURS,
+  LATE_CANCELLATION_FEE_CENTS,
+} from "@/lib/cancellation";
 import { TERMS_VERSION, site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -108,6 +112,24 @@ export default function TermsPage() {
               service continues through the end of the following period. Cleanings continue
               to be scheduled and delivered up to the end date, and the membership is not
               refunded on a partial-period basis.
+            </p>
+            <p>
+              A one-time cleaning may be cancelled from your account at any time before
+              it takes place. Cancelled with {CANCELLATION_NOTICE_HOURS} hours&apos;
+              notice or more, it is refunded in full. Cancelled with less than{" "}
+              {CANCELLATION_NOTICE_HOURS} hours&apos; notice, a{" "}
+              {formatCents(LATE_CANCELLATION_FEE_CENTS)} late cancellation fee is
+              retained and the balance is refunded. Where the amount paid is less than
+              the fee, the fee is limited to the amount paid and no further sum is due.
+            </p>
+            <p>
+              Being unable to gain lawful entry at the scheduled time is treated as a
+              cancellation with less than {CANCELLATION_NOTICE_HOURS} hours&apos;
+              notice. The cleaner has travelled and the slot cannot be resold.
+            </p>
+            <p>
+              Refunds are issued to the original payment method and are typically
+              visible within a few working days, depending on the card issuer.
             </p>
           </Clause>
 
