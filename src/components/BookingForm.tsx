@@ -330,9 +330,21 @@ export function BookingForm({
               />
             ))}
           </div>
+          {/* The same dead end as the hero, and this one costs money. It used
+              to say "pick the closest size and tell us in the notes", which
+              invites somebody with a 3,000 square foot house to book a studio
+              clean at $110 and expect us to turn up for it. Houses are priced
+              by square footage and there is a page for that. */}
           <p className="mt-3 text-sm text-muted">
-            Single-family homes are quoted separately by square footage. Pick the closest
-            size and tell us in the notes below.
+            Cleaning a house?{" "}
+            <Link
+              href="/services/residential"
+              className="font-medium text-accent hover:underline"
+            >
+              Tell us about it
+            </Link>{" "}
+            and we come back with a price, usually the same day. Houses are quoted by
+            square footage, so they are not on this list.
           </p>
         </Fieldset>
 
