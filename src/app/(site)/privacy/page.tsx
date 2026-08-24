@@ -50,7 +50,18 @@ export default function PrivacyPage() {
                 else.
               </li>
               <li>Anything you type into the notes, such as access quirks or priorities.</li>
+              <li>
+                For a house, its square footage, because houses are quoted on size rather
+                than charged at a published rate.
+              </li>
             </ul>
+            <p>
+              If you ask for a house quote without booking, we keep what that form
+              collects: your name, email, phone, the address if you gave one, the square
+              footage, whether there are pets, what you are asking for, and your IP
+              address and browser identifier at the moment you sent it. That is a request
+              to be quoted rather than a booking, and it does not create an account.
+            </p>
             <p>The system also records, without you entering it:</p>
             <ul>
               <li>
@@ -142,20 +153,25 @@ export default function PrivacyPage() {
 
           <Clause n="5" title="Text messages">
             <p>
-              If you tick the box at booking, we may send you service text messages about
-              scheduling: a confirmation when you book, and a reminder the day before a
-              visit. We do not send marketing texts, and consent to service messages is
-              not a condition of purchase.
+              <strong>We do not currently send text messages.</strong> Everything about
+              your booking comes by email. If you ticked the box at booking we have
+              recorded that consent and the date you gave it, and nothing has been sent
+              on the strength of it.
             </p>
             <p>
-              Message frequency depends on how often you are cleaned. Message and data
-              rates may apply. Reply STOP at any time to stop them, or HELP for help.
-              Stopping texts does not affect your cleanings or your emails.
+              If we introduce texting later, it would cover scheduling only: a
+              confirmation when you book, and a reminder before a visit. We would not
+              send marketing texts, and consent to service messages is not a condition of
+              purchase. Message frequency would depend on how often you are cleaned.
+              Message and data rates may apply. You would be able to reply STOP at any
+              time to stop them, or HELP for help, and stopping texts would not affect
+              your cleanings or your emails.
             </p>
             <p>
               Your phone number is not sold, and it is not shared with anybody for their
-              own marketing. It reaches our messaging provider only so the message can be
-              delivered.
+              own marketing. Today it is used to reach you about a visit. If texting
+              starts, it would reach a messaging provider only so the message can be
+              delivered, and this section would be updated before that happened.
             </p>
           </Clause>
 
@@ -188,6 +204,12 @@ export default function PrivacyPage() {
               )}
               . We may need to confirm you are who you say you are before acting, which
               usually means replying from the address you booked with.
+            </p>
+            <p>
+              Two of our emails carry an unsubscribe link: the monthly reminder to claim
+              a membership add-on, and the note when a membership ends. Using it stops
+              those two and nothing else, so you keep the emails you need in order to
+              know a cleaner is coming.
             </p>
             <p>
               Some information cannot be deleted while it is still needed, such as a
