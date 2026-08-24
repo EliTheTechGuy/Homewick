@@ -3,6 +3,7 @@ import { formatLong, type ISODate } from "../dates";
 import { formatCents } from "../money";
 import { site } from "../site";
 import { serviceTypeLabel, unitSizeLabel, type ServiceType, type UnitSize } from "../pricing";
+import { cadenceLabel } from "../cadence";
 
 export type Composed = { subject: string; html: string; text: string };
 
@@ -198,6 +199,63 @@ export function cancellationConfirmedEmail(params: {
     ],
     footerNote:
       "You can still book a one-time clean any time, at the standard rate.",
+  });
+}
+
+/**
+ * A booking entered by hand in admin, waiting on the customer's card.
+ *
+ * Admin used to be handed the raw Stripe URL to copy and forward itself. That
+ * is a live payment link, and it ended up in a clipboard and then in whatever
+ * text thread or email the operator happened to use, formatted as a wall of
+ * characters that looks exactly like something you should not click.
+ *
+ * Sent from us instead, so it arrives looking like the rest of our mail and
+ * says what was agreed on the phone before it asks for a card.
+ *
+ * The deadline is stated because Stripe gives these sessions 24 hours and
+ * will not allow longer. Somebody who opens it on Sunday needs to know why it
+ * no longer works, and who to ask.
+ */
+export function paymentLinkEmail(params: {
+  firstName: string;
+  checkoutUrl: string;
+  amountCents: number;
+  serviceType: ServiceType;
+  startsOn: ISODate;
+  address: string;
+  /** Null for a single visit. Otherwise how many days between cleanings. */
+  intervalDays: number | null;
+  recurring: boolean;
+}): Composed {
+  const price = formatCents(params.amountCents);
+
+  const rows: Row[] = [
+    { label: "Service", value: serviceTypeLabel(params.serviceType) },
+    { label: "First clean", value: formatLong(params.startsOn) },
+    { label: "Where", value: params.address },
+    {
+      label: params.recurring ? "Price" : "Total",
+      value: params.recurring ? `${price} ${cadenceLabel(params.intervalDays)}` : price,
+    },
+  ];
+
+  return compose({
+    subject: "Your Homewick booking, ready to confirm",
+    heading: `Almost there, ${params.firstName}`,
+    intro:
+      "Here is the cleaning we set up for you. One card entry and it is booked.",
+    rows,
+    body: [
+      "Nothing is on the schedule until the payment goes through, so the date above is not held yet.",
+      params.recurring
+        ? "After that it runs on its own. You are billed and cleaned on the same rhythm, and you can stop with 14 days' notice whenever you like."
+        : "This is a single visit. There is nothing recurring and nothing to cancel afterwards.",
+      "The link is good for 24 hours. If it has stopped working by the time you get to it, get in touch and we will send a fresh one.",
+    ],
+    cta: { label: "Confirm and pay", url: params.checkoutUrl },
+    footerNote:
+      "Your card is entered with Stripe, who handle the payment. We never see it.",
   });
 }
 

@@ -6,7 +6,9 @@ import { transaction } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin-auth";
 import { encryptSecret } from "@/lib/secrets";
 import { today } from "@/lib/dates";
-import { UNIT_SIZES, type UnitSize } from "@/lib/pricing";
+import { UNIT_SIZES, type ServiceType, type UnitSize } from "@/lib/pricing";
+import { sendOnce } from "@/lib/emails/send-once";
+import { paymentLinkEmail } from "@/lib/emails/templates";
 import { createCheckoutSession } from "./checkout";
 
 /**
@@ -32,7 +34,7 @@ import { createCheckoutSession } from "./checkout";
  */
 
 type Result =
-  | { ok: true; message: string; checkoutUrl?: string }
+  | { ok: true; message: string; checkoutUrl?: string; emailed: boolean }
   | { ok: false; message: string };
 
 const schema = z.object({
@@ -170,7 +172,7 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
             input.notes || null,
           ],
         );
-        return { kind: "one_time" as const, id: rows[0].id };
+        return { kind: "one_time" as const, id: rows[0].id, customerId };
       }
 
       // billing_day still has to satisfy its 1 to 28 constraint even though a
@@ -198,7 +200,7 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
           admin.actor,
         ],
       );
-      return { kind: "membership" as const, id: rows[0].id };
+      return { kind: "membership" as const, id: rows[0].id, customerId };
     });
 
     // Outside the transaction: a Stripe outage must not roll back a customer
@@ -212,9 +214,39 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
     if ("error" in session) {
       return {
         ok: true,
+        emailed: false,
         message: `Saved, but the payment link could not be created: ${session.error}`,
       };
     }
+
+    // Sent to the customer rather than handed back for the operator to
+    // forward. A raw Stripe URL pasted into a text message is a wall of
+    // characters that looks exactly like something you should not click, and
+    // it arrives with none of the context the call had.
+    //
+    // Never allowed to fail the booking. The record is already saved, and the
+    // link is returned below so it can still be sent by hand.
+    const emailed = await sendOnce({
+      eventKey: `manual_booking:${ref.id}`,
+      kind: "payment_link",
+      to: input.email,
+      customerId: ref.customerId,
+      message: paymentLinkEmail({
+        firstName: input.firstName,
+        checkoutUrl: session.url,
+        amountCents: input.amountCents,
+        serviceType: input.serviceType as ServiceType,
+        startsOn: input.startsOn,
+        address: [input.line1, input.line2, `${input.city}, TX ${input.postalCode}`]
+          .filter(Boolean)
+          .join(", "),
+        intervalDays: input.intervalDays ?? null,
+        recurring: input.plan === "recurring",
+      }),
+    }).catch((err) => {
+      console.error(`[admin] payment link email failed for ${ref.id}`, err);
+      return { sent: false as const };
+    });
 
     const cadence =
       input.plan === "recurring"
@@ -223,7 +255,10 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
 
     return {
       ok: true,
-      message: `${input.firstName} is in, ${cadence}. Send them the payment link to activate it.`,
+      emailed: emailed.sent,
+      message: emailed.sent
+        ? `${input.firstName} is in, ${cadence}. We have emailed ${input.email} the payment link.`
+        : `${input.firstName} is in, ${cadence}, but the email did not send. Send them the link below yourself.`,
       checkoutUrl: session.url,
     };
   } catch (err) {

@@ -14,6 +14,7 @@ import {
   membershipEndedEmail,
   membershipWelcomeEmail,
   oneTimeBookingEmail,
+  paymentLinkEmail,
 } from "../src/lib/emails/templates";
 
 for (const file of [".env.local", ".env"]) {
@@ -71,6 +72,16 @@ const samples = {
     endedOn: "2026-09-15",
     lastVisit: "2026-09-03",
     unsubscribeUrl: "https://homewickcleaning.net/unsubscribe/example/token",
+  }),
+  payment_link: paymentLinkEmail({
+    firstName: "Elisha",
+    checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_example",
+    amountCents: 19488,
+    serviceType: "standard",
+    startsOn: "2026-09-02",
+    address: "1930 Hi Line Drive, Dallas, TX 75207",
+    intervalDays: 21,
+    recurring: true,
   }),
   // The other tier reads differently enough to be worth previewing on its own.
   membership_monthly: membershipWelcomeEmail({

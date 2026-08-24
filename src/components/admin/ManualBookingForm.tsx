@@ -39,6 +39,7 @@ export function ManualBookingForm() {
     ok: boolean;
     message: string;
     url?: string;
+    emailed?: boolean;
   } | null>(null);
   const [missing, setMissing] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -95,6 +96,7 @@ export function ManualBookingForm() {
         ok: res.ok,
         message: res.message,
         url: res.ok ? res.checkoutUrl : undefined,
+        emailed: res.ok ? res.emailed : undefined,
       });
       showBanner();
     });
@@ -144,16 +146,23 @@ export function ManualBookingForm() {
               </p>
               {result!.url && (
                 <>
-                  <p className="mt-4 text-xs uppercase tracking-widest text-muted">
-                    Send them this
-                  </p>
-                  <p className="mt-1 break-all font-mono text-sm text-navy">
-                    {result!.url}
-                  </p>
                   <p className="mt-3 text-sm text-muted">
                     Nothing is scheduled until they pay. The link takes their card and
-                    the booking activates on its own.
+                    the booking activates on its own. It is good for 24 hours, which is
+                    the longest Stripe allows.
                   </p>
+                  {/* Behind a fold when the email went, because the flow is
+                      that we send it, not that you forward it. Still here for
+                      the call where somebody would rather have it by text, and
+                      open by default when the email did not go at all. */}
+                  <details className="mt-4" open={result!.emailed === false}>
+                    <summary className="cursor-pointer text-xs uppercase tracking-widest text-muted">
+                      {result!.emailed ? "Copy the link instead" : "Send them this"}
+                    </summary>
+                    <p className="mt-2 break-all font-mono text-sm text-navy">
+                      {result!.url}
+                    </p>
+                  </details>
                 </>
               )}
             </>
