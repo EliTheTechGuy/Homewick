@@ -55,12 +55,31 @@ export default function HomePage() {
               and move in and out. Book an apartment online in a couple of minutes at a
               published rate, or tell us about your house and we will quote it.
             </p>
+            {/* Two doors, because the paragraph above promises two things and
+                a house cannot be booked online. Both buttons used to lead to
+                the apartment form and the apartment price list, so somebody
+                with a house read that we clean houses and then found nowhere
+                to go. The same fork already existed further down this page and
+                simply never reached the top of it.
+
+                Pricing drops to a link rather than a third button. It is the
+                second most visited page on the site so it has to stay, but it
+                is something to read, not one of the two things to do. */}
             <div className="mt-9 flex flex-wrap gap-3">
-              <ButtonLink href="/book">Book online</ButtonLink>
-              <ButtonLink href="/pricing" variant="secondary">
-                See pricing
+              <ButtonLink href="/book">Book an apartment clean</ButtonLink>
+              <ButtonLink href="/services/residential" variant="secondary">
+                Get a house quote
               </ButtonLink>
             </div>
+            <p className="mt-5 text-sm text-muted">
+              <Link
+                href="/pricing"
+                className="font-medium text-accent hover:underline"
+              >
+                See apartment pricing
+              </Link>{" "}
+              for every size and service.
+            </p>
           </div>
 
           {/* priority, because this is the largest thing above the fold and
