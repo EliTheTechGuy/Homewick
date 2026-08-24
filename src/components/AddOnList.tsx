@@ -1,4 +1,4 @@
-import { ADD_ONS, DEEP_CLEAN_INCLUDES, PET_SURCHARGE_CENTS } from "@/lib/pricing";
+import { ADD_ONS, PET_SURCHARGE_CENTS, includedInService } from "@/lib/pricing";
 import { formatCents } from "@/lib/money";
 
 export function AddOnList({ className = "" }: { className?: string }) {
@@ -12,7 +12,7 @@ export function AddOnList({ className = "" }: { className?: string }) {
           >
             <dt className="text-body">
               {a.name}
-              {DEEP_CLEAN_INCLUDES.includes(a.code as never) && (
+              {includedInService(a.code, "deep") && (
                 <span className="ml-2 text-xs text-accent">(free with a deep clean)</span>
               )}
               {!a.freePerkEligible && (
@@ -39,7 +39,13 @@ export function AddOnList({ className = "" }: { className?: string }) {
           <dd className="shrink-0 text-lg font-semibold text-accent">Included</dd>
         </div>
       </dl>
-      <p className="mt-6 text-sm text-muted">
+      {/* Said once, under the list, rather than tagged onto all six rows. A
+          marker against every line reads as a caveat rather than as the good
+          news it is. */}
+      <p className="mt-6 text-sm text-body">
+        A move in and out clean includes every add-on on this list at no extra charge.
+      </p>
+      <p className="mt-2 text-sm text-muted">
         Laundry is performed at the customer&apos;s own risk. See the service agreement.
       </p>
     </div>

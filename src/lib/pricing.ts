@@ -39,7 +39,7 @@ export const SERVICE_TYPES: { id: ServiceType; label: string; blurb: string }[] 
     id: "move_out",
     label: "Move In & Out",
     blurb:
-      "An empty-unit clean, whether you are handing the keys back or picking them up. Aimed at the condition a leasing office inspects against.",
+      "An empty-unit clean, whether you are handing the keys back or picking them up. Aimed at the condition a leasing office inspects against, with every add-on included.",
   },
 ];
 
@@ -242,31 +242,52 @@ export const ADD_ONS: AddOn[] = [
 export const FREE_PERK_ELIGIBLE = ADD_ONS.filter((a) => a.freePerkEligible);
 
 /**
- * Add-ons that come with a deep clean rather than being sold alongside one.
+ * What each service already covers, rather than sells alongside itself.
  *
- * A deep clean is the service you buy when a place needs resetting, and
- * everywhere else in this market that means the fridge and the cabinets are
- * part of it. Selling them separately on top read as nickel-and-diming
- * somebody who had already chosen the expensive option.
+ * A fact about the service, not about the add-on. The same fridge clean is a
+ * paid extra on a standard visit, part of a deep clean, and part of a move in
+ * and out. Which it is depends entirely on what was booked.
  *
- * Codes rather than a flag on the add-on, because this is a fact about the
- * service, not about the add-on. The same fridge clean is still a paid extra
- * on a standard visit.
+ * A standard clean includes none of them: it is the upkeep visit, and the
+ * extras are genuinely extra.
+ *
+ * A deep clean is what you buy when a place needs resetting, and everywhere
+ * else in this market that means the fridge and the cabinets are part of it.
+ * Charging for them on top of the service somebody already chose because it is
+ * the thorough one read as nickel-and-diming.
+ *
+ * A move in and out clean includes everything. It is the most expensive
+ * service and it exists to hand a place over empty and inspection-ready, which
+ * is not a thing you can do while leaving the oven out of it. Derived from the
+ * catalog rather than listed, so a new add-on is covered the day it is added
+ * and cannot be forgotten here.
  */
-export const DEEP_CLEAN_INCLUDES = ["fridge", "cabinets"] as const;
+export const SERVICE_INCLUDES: Record<ServiceType, readonly string[]> = {
+  standard: [],
+  deep: ["fridge", "cabinets"],
+  move_out: ADD_ONS.map((a) => a.code),
+};
+
+/** The add-on codes a service covers. Empty for a membership, which picks none. */
+export function includedAddOnCodes(
+  serviceType: ServiceType | undefined,
+): readonly string[] {
+  return serviceType ? SERVICE_INCLUDES[serviceType] : [];
+}
 
 /**
  * Whether this service already covers this add-on, so it must not be charged.
  *
- * Deliberately takes the service rather than assuming deep. A move in and out
- * clean is priced separately and is not part of this, and a membership picks
- * no service at all, so nothing is ever included on that path.
+ * A membership passes undefined and gets false for everything. Members buy
+ * "cleanings" and never choose a service, so nothing is ever included on that
+ * path even though their first visit is upgraded to a deep clean behind the
+ * scenes.
  */
 export function includedInService(
   code: string,
   serviceType: ServiceType | undefined,
 ): boolean {
-  return serviceType === "deep" && DEEP_CLEAN_INCLUDES.includes(code as never);
+  return includedAddOnCodes(serviceType).includes(code);
 }
 
 export function unitSizeLabel(size: UnitSize): string {

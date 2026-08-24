@@ -418,6 +418,12 @@ export function BookingForm({
               there is nothing to add for those.
             </p>
           )}
+          {activeServiceType === "move_out" && (
+            <p className="mt-3 text-sm text-muted">
+              A move in and out clean covers every add-on on this list. The place is
+              being handed over, so there is nothing here left to pay for.
+            </p>
+          )}
         </Fieldset>
 
         {/* Free perk. Only on the tier that includes one. */}
