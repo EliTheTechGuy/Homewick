@@ -17,8 +17,10 @@ import {
   type SubscriptionRow,
 } from "@/lib/membership-lifecycle";
 import {
+  DEEP_CLEAN_INCLUDES,
   PET_SURCHARGE_CENTS,
   SERVICE_PRICES,
+  includedInService,
   membershipPrice,
   membershipTier,
   onboardingServiceType,
@@ -392,7 +394,17 @@ async function insertAddOns(
   isMember: boolean,
   periodId: string | null,
 ): Promise<void> {
-  if (input.addOns.length === 0) return;
+  // What the deep clean covers is added here rather than trusted from the
+  // form. The form ticks them and disables them, but this is a server action
+  // and can be called directly, and a cleaner arriving without knowing to do
+  // the fridge is a complaint whether or not the request was well formed.
+  const codes = [
+    ...new Set([
+      ...input.addOns,
+      ...(input.serviceType === "deep" ? DEEP_CLEAN_INCLUDES : []),
+    ]),
+  ];
+  if (codes.length === 0) return;
 
   const { rows: catalog } = await client.query<{
     id: string;
@@ -400,7 +412,7 @@ async function insertAddOns(
     price_cents: number;
     free_perk_eligible: boolean;
   }>(`select id, code, price_cents, free_perk_eligible from add_ons where code = any($1)`, [
-    input.addOns,
+    codes,
   ]);
 
   let addOnsTotal = 0;
@@ -411,6 +423,22 @@ async function insertAddOns(
   const tierHasFreeAddOn = isMember && membershipTier(input.frequency).freeAddOn;
 
   for (const addOn of catalog) {
+    // A deep clean already covers these, so they are stored against the visit
+    // at nothing. Stored rather than dropped, because the cleaner's job sheet
+    // is built from this table and somebody needs to know to open the fridge.
+    //
+    // Checked here as well as in the quote. This is the line that decides
+    // what the card is charged, and the two must not be able to disagree.
+    if (includedInService(addOn.code, input.serviceType)) {
+      await client.query(
+        `insert into visit_add_ons (visit_id, add_on_id, price_cents_at_time, is_free_perk)
+         values ($1, $2, 0, false)
+         on conflict (visit_id, add_on_id) do nothing`,
+        [visitId, addOn.id],
+      );
+      continue;
+    }
+
     const isFreePerk =
       tierHasFreeAddOn && Boolean(input.freePerk) && addOn.code === input.freePerk;
 
