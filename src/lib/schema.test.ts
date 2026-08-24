@@ -8,6 +8,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { citext } from "@electric-sql/pglite/contrib/citext";
 import { generateForSubscription, type SubscriptionRow } from "./membership-lifecycle";
 import {
+  ADD_ONS,
   MEMBERSHIP_TIERS,
   SERVICE_PRICES,
   frequencyForVisits,
@@ -103,11 +104,33 @@ test("schema applies cleanly and seeds launch pricing", async () => {
     );
   }
 
-  const perk = await db.query<{ code: string }>(
-    "select code from add_ons where free_perk_eligible order by sort_order",
-  );
+  // The one that bites hardest. The booking form quotes from ADD_ONS in code
+  // and insertAddOns bills from this table, so a price changed in one place
+  // and not the other shows a customer one number and charges them another,
+  // with nothing erroring and no test failing anywhere else.
+  const addOns = await db.query<{
+    code: string;
+    price_cents: number;
+    free_perk_eligible: boolean;
+  }>("select code, price_cents, free_perk_eligible from add_ons order by sort_order");
+  assert.equal(addOns.rows.length, ADD_ONS.length, "every add-on in code exists in the database");
+  for (const row of addOns.rows) {
+    const inCode = ADD_ONS.find((a) => a.code === row.code);
+    assert.ok(inCode, `${row.code} is in the database but not in the catalog`);
+    assert.equal(
+      row.price_cents,
+      inCode.priceCents,
+      `${row.code} is quoted at ${inCode.priceCents} and billed at ${row.price_cents}`,
+    );
+    assert.equal(
+      row.free_perk_eligible,
+      inCode.freePerkEligible,
+      `${row.code} disagrees about whether it can be claimed free`,
+    );
+  }
+
   assert.deepEqual(
-    perk.rows.map((r) => r.code),
+    addOns.rows.filter((r) => r.free_perk_eligible).map((r) => r.code),
     ["oven", "fridge", "windows", "balcony"],
   );
 });

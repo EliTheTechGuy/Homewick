@@ -9,6 +9,7 @@ import {
   MEMBER_FIRST_MONTH_DISCOUNT,
   PET_SURCHARGE_CENTS,
   SERVICE_PRICES,
+  addOnByCode,
   frequencyForVisits,
   onboardingServiceType,
 } from "./pricing";
@@ -241,8 +242,11 @@ test("a paid add-on is included in the quoted total", async () => {
     hasPets: false,
   });
 
-  // Laundry is not perk-eligible, so a member pays it at 10% off: 2500 -> 2250.
-  assert.equal(quote.totalCents, Math.round(26900 * 0.85) + 2250);
+  // Laundry is not perk-eligible, so a member pays it at the 10% member rate.
+  // Read from the catalog rather than written out, because an add-on reprice
+  // should not need this arithmetic edited in two places to stay true.
+  const laundry = addOnByCode("laundry")!.priceCents;
+  assert.equal(quote.totalCents, Math.round(26900 * 0.85) + Math.round(laundry * 0.9));
 });
 
 test("the pet surcharge is charged once, not on every visit", async () => {
@@ -725,7 +729,8 @@ test("a free add-on cannot be claimed on a tier that does not include one", asyn
   );
   assert.equal(
     quote.totalCents,
-    MEMBERSHIP_TIERS.monthly.prices["2br_2ba"].monthlyCents + Math.round(3500 * 0.9),
+    MEMBERSHIP_TIERS.monthly.prices["2br_2ba"].monthlyCents +
+      Math.round(addOnByCode("oven")!.priceCents * 0.9),
     "the add-on is charged at the member rate, not given away",
   );
 });

@@ -221,13 +221,22 @@ export type AddOn = {
   freePerkEligible: boolean;
 };
 
+/**
+ * Repriced against what the metroplex actually charges. These are the prices
+ * the site quotes.
+ *
+ * They must match the add_ons table row for row. The booking form quotes from
+ * this list, and the code that writes the charge reads price_cents out of the
+ * database, so a change made in one place and not the other shows a customer
+ * one number and bills them another. A test asserts the two agree.
+ */
 export const ADD_ONS: AddOn[] = [
-  { code: "oven", name: "Inside oven", priceCents: 3500, freePerkEligible: true },
-  { code: "fridge", name: "Inside refrigerator", priceCents: 3500, freePerkEligible: true },
-  { code: "windows", name: "Interior windows", priceCents: 4500, freePerkEligible: true },
-  { code: "balcony", name: "Balcony / patio", priceCents: 2500, freePerkEligible: true },
-  { code: "cabinets", name: "Cabinet interiors", priceCents: 4500, freePerkEligible: false },
-  { code: "laundry", name: "Laundry, per load", priceCents: 2500, freePerkEligible: false },
+  { code: "oven", name: "Inside oven", priceCents: 2500, freePerkEligible: true },
+  { code: "fridge", name: "Inside refrigerator", priceCents: 3000, freePerkEligible: true },
+  { code: "windows", name: "Interior windows", priceCents: 3000, freePerkEligible: true },
+  { code: "balcony", name: "Balcony / patio", priceCents: 2000, freePerkEligible: true },
+  { code: "cabinets", name: "Cabinet interiors", priceCents: 2500, freePerkEligible: false },
+  { code: "laundry", name: "Laundry, per load", priceCents: 1500, freePerkEligible: false },
 ];
 
 export const FREE_PERK_ELIGIBLE = ADD_ONS.filter((a) => a.freePerkEligible);
