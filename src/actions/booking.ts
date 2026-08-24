@@ -17,7 +17,7 @@ import {
   type SubscriptionRow,
 } from "@/lib/membership-lifecycle";
 import {
-  DEEP_CLEAN_INCLUDES,
+  includedAddOnCodes,
   PET_SURCHARGE_CENTS,
   SERVICE_PRICES,
   includedInService,
@@ -401,7 +401,7 @@ async function insertAddOns(
   const codes = [
     ...new Set([
       ...input.addOns,
-      ...(input.serviceType === "deep" ? DEEP_CLEAN_INCLUDES : []),
+      ...includedAddOnCodes(input.serviceType),
     ]),
   ];
   if (codes.length === 0) return;
