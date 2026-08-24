@@ -1,11 +1,13 @@
 import { z } from "zod";
 import {
   ADD_ONS,
+  DEEP_CLEAN_INCLUDES,
   FREE_PERK_ELIGIBLE,
   MEMBERSHIP_FREQUENCIES,
   PET_SURCHARGE_CENTS,
   SERVICE_PRICES,
   firstMonthCents,
+  includedInService,
   membershipTier,
   type MembershipFrequency,
 } from "./pricing";
@@ -207,10 +209,26 @@ export function quoteFor(input: QuoteParams): Quote {
     lines.push({ label: "Pet home surcharge", amountCents: PET_SURCHARGE_CENTS });
   }
 
-  for (const code of input.addOns) {
+  // What the chosen service already covers is quoted whether or not it was
+  // asked for, so the total and the itemised lines describe the same visit.
+  // Deduped, because a fridge clean ticked before the service was switched to
+  // deep must not appear twice.
+  const codes = [
+    ...new Set([
+      ...input.addOns,
+      ...(input.serviceType === "deep" ? DEEP_CLEAN_INCLUDES : []),
+    ]),
+  ];
+
+  for (const code of codes) {
     const addOn = ADD_ONS.find((a) => a.code === code);
     if (!addOn) continue;
-    if (input.plan === "membership" && tier.freeAddOn && code === input.freePerk) {
+    // Part of the deep clean, so it appears on the quote at nothing rather
+    // than being left off it. Somebody choosing the expensive service should
+    // see what that bought them.
+    if (includedInService(code, input.serviceType)) {
+      lines.push({ label: `${addOn.name} (included)`, amountCents: 0 });
+    } else if (input.plan === "membership" && tier.freeAddOn && code === input.freePerk) {
       lines.push({ label: `${addOn.name} (free this month)`, amountCents: 0 });
     } else {
       // Members get 10% off any additional add-ons.

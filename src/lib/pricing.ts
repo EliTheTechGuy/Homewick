@@ -29,7 +29,7 @@ export const SERVICE_TYPES: { id: ServiceType; label: string; blurb: string }[] 
     id: "deep",
     label: "Deep Clean",
     blurb:
-      "A reset for a place that has not been cleaned in a while. Baseboards, buildup, and detail work included.",
+      "A reset for a place that has not been cleaned in a while. Baseboards, buildup, and detail work, plus inside the fridge and the cabinet interiors at no extra charge.",
   },
   {
     // The id stays move_out because it is a database enum and the work is the
@@ -240,6 +240,34 @@ export const ADD_ONS: AddOn[] = [
 ];
 
 export const FREE_PERK_ELIGIBLE = ADD_ONS.filter((a) => a.freePerkEligible);
+
+/**
+ * Add-ons that come with a deep clean rather than being sold alongside one.
+ *
+ * A deep clean is the service you buy when a place needs resetting, and
+ * everywhere else in this market that means the fridge and the cabinets are
+ * part of it. Selling them separately on top read as nickel-and-diming
+ * somebody who had already chosen the expensive option.
+ *
+ * Codes rather than a flag on the add-on, because this is a fact about the
+ * service, not about the add-on. The same fridge clean is still a paid extra
+ * on a standard visit.
+ */
+export const DEEP_CLEAN_INCLUDES = ["fridge", "cabinets"] as const;
+
+/**
+ * Whether this service already covers this add-on, so it must not be charged.
+ *
+ * Deliberately takes the service rather than assuming deep. A move in and out
+ * clean is priced separately and is not part of this, and a membership picks
+ * no service at all, so nothing is ever included on that path.
+ */
+export function includedInService(
+  code: string,
+  serviceType: ServiceType | undefined,
+): boolean {
+  return serviceType === "deep" && DEEP_CLEAN_INCLUDES.includes(code as never);
+}
 
 export function unitSizeLabel(size: UnitSize): string {
   return UNIT_SIZES.find((u) => u.id === size)?.label ?? size;

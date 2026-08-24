@@ -1,4 +1,4 @@
-import { ADD_ONS, PET_SURCHARGE_CENTS } from "@/lib/pricing";
+import { ADD_ONS, DEEP_CLEAN_INCLUDES, PET_SURCHARGE_CENTS } from "@/lib/pricing";
 import { formatCents } from "@/lib/money";
 
 export function AddOnList({ className = "" }: { className?: string }) {
@@ -12,6 +12,9 @@ export function AddOnList({ className = "" }: { className?: string }) {
           >
             <dt className="text-body">
               {a.name}
+              {DEEP_CLEAN_INCLUDES.includes(a.code as never) && (
+                <span className="ml-2 text-xs text-accent">(free with a deep clean)</span>
+              )}
               {!a.freePerkEligible && (
                 <span className="ml-2 text-xs text-muted">(not eligible as the free perk)</span>
               )}

@@ -11,6 +11,7 @@ import { WEEKDAYS, today, addDays, addMonths, formatLong } from "@/lib/dates";
 import {
   ADD_ONS,
   FREE_PERK_ELIGIBLE,
+  includedInService,
   MEMBERSHIP_FREQUENCIES,
   MEMBERSHIP_TIERS,
   PET_SURCHARGE_CENTS,
@@ -117,6 +118,11 @@ export function BookingForm({
     ENTRY_METHODS.find((m) => m.id === entryMethod)?.detailLabel ?? null;
 
   const tier = membershipTier(frequency);
+
+  // The service actually being bought. A membership does not pick one, so
+  // nothing is ever "included with a deep clean" on that path: the deep clean
+  // a new member gets is an operational upgrade they were never sold.
+  const activeServiceType = plan === "one_time" ? serviceType : undefined;
 
   /**
    * Switching tier clears a free add-on the new tier does not include.
@@ -370,30 +376,48 @@ export function BookingForm({
         {/* Add-ons */}
         <Fieldset legend="Add-ons">
           <div className="grid gap-2 sm:grid-cols-2">
-            {ADD_ONS.map((a) => (
-              <label
-                key={a.code}
-                className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-4 transition-colors ${
-                  addOns.includes(a.code)
-                    ? "border-accent bg-accent/5"
-                    : "border-hairline hover:border-accent/40"
-                }`}
-              >
-                <span className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={addOns.includes(a.code)}
-                    onChange={() => toggleAddOn(a.code)}
-                    className="h-4 w-4 accent-[#1F5FA6]"
-                  />
-                  <span className="text-sm text-body">{a.name}</span>
-                </span>
-                <span className="text-sm font-semibold text-accent">
-                  {formatCents(a.priceCents)}
-                </span>
-              </label>
-            ))}
+            {ADD_ONS.map((a) => {
+              // A deep clean already covers some of these. They stay on the
+              // list, ticked and locked, rather than disappearing: a customer
+              // who came looking for "inside the fridge" needs to see that
+              // they are getting it, not fail to find it.
+              const included = includedInService(a.code, activeServiceType);
+              const checked = included || addOns.includes(a.code);
+
+              return (
+                <label
+                  key={a.code}
+                  className={`flex items-center justify-between gap-3 rounded-xl border p-4 transition-colors ${
+                    included
+                      ? "border-accent/40 bg-accent/5"
+                      : checked
+                        ? "cursor-pointer border-accent bg-accent/5"
+                        : "cursor-pointer border-hairline hover:border-accent/40"
+                  }`}
+                >
+                  <span className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={included}
+                      onChange={() => toggleAddOn(a.code)}
+                      className="h-4 w-4 accent-[#1F5FA6]"
+                    />
+                    <span className="text-sm text-body">{a.name}</span>
+                  </span>
+                  <span className="text-sm font-semibold text-accent">
+                    {included ? "Included" : formatCents(a.priceCents)}
+                  </span>
+                </label>
+              );
+            })}
           </div>
+          {activeServiceType === "deep" && (
+            <p className="mt-3 text-sm text-muted">
+              A deep clean covers inside the fridge and the cabinet interiors, so
+              there is nothing to add for those.
+            </p>
+          )}
         </Fieldset>
 
         {/* Free perk. Only on the tier that includes one. */}

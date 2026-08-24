@@ -8,6 +8,7 @@ import {
   MEMBERSHIP_TIERS,
   MEMBER_FIRST_MONTH_DISCOUNT,
   PET_SURCHARGE_CENTS,
+  DEEP_CLEAN_INCLUDES,
   SERVICE_PRICES,
   addOnByCode,
   frequencyForVisits,
@@ -762,4 +763,87 @@ test("only the tier that pays for a deep clean gets one at signup", () => {
       );
     }
   }
+});
+
+// --- What a deep clean covers ------------------------------------------
+
+test("a deep clean covers the fridge and the cabinets without charging for them", () => {
+  const deep = quoteFor({
+    plan: "one_time",
+    unitSize: "2br_2ba",
+    serviceType: "deep",
+    addOns: [],
+    hasPets: false,
+  });
+
+  // Quoted whether or not they were asked for, so the itemised lines and the
+  // total describe the same visit.
+  for (const code of DEEP_CLEAN_INCLUDES) {
+    const line = deep.lines.find((l) => l.label.startsWith(addOnByCode(code)!.name));
+    assert.ok(line, `${code} should appear on a deep clean quote`);
+    assert.equal(line.amountCents, 0, `${code} must not be charged on a deep clean`);
+  }
+  assert.equal(
+    deep.totalCents,
+    SERVICE_PRICES["2br_2ba"].deep,
+    "a deep clean with nothing else added costs exactly the deep clean price",
+  );
+
+  // Ticking them explicitly changes nothing. Somebody who selected the fridge
+  // and then switched to a deep clean must not be billed for it, and must not
+  // see it listed twice.
+  const ticked = quoteFor({
+    plan: "one_time",
+    unitSize: "2br_2ba",
+    serviceType: "deep",
+    addOns: [...DEEP_CLEAN_INCLUDES],
+    hasPets: false,
+  });
+  assert.equal(ticked.totalCents, deep.totalCents);
+  assert.equal(ticked.lines.length, deep.lines.length);
+});
+
+test("the same add-ons are still sold on the services that do not include them", () => {
+  for (const serviceType of ["standard", "move_out"] as const) {
+    const quote = quoteFor({
+      plan: "one_time",
+      unitSize: "2br_2ba",
+      serviceType,
+      addOns: [...DEEP_CLEAN_INCLUDES],
+      hasPets: false,
+    });
+
+    const extras = DEEP_CLEAN_INCLUDES.reduce(
+      (sum, code) => sum + addOnByCode(code)!.priceCents,
+      0,
+    );
+    assert.equal(
+      quote.totalCents,
+      SERVICE_PRICES["2br_2ba"][serviceType] + extras,
+      `${serviceType} must still charge for the fridge and the cabinets`,
+    );
+  }
+});
+
+test("a membership never gets a deep clean's inclusions, because it never bought one", () => {
+  // The first visit of a new membership is upgraded to a deep clean, but the
+  // member bought "cleanings" and was never quoted a deep clean. Quoting them
+  // free add-ons off the back of an upgrade nobody sold would be inventing an
+  // entitlement, and the member cannot see the deep clean to know it happened.
+  const quote = quoteFor({
+    plan: "membership",
+    unitSize: "2br_2ba",
+    addOns: [...DEEP_CLEAN_INCLUDES],
+    hasPets: false,
+  });
+
+  const memberRate = DEEP_CLEAN_INCLUDES.reduce(
+    (sum, code) => sum + Math.round(addOnByCode(code)!.priceCents * 0.9),
+    0,
+  );
+  assert.equal(
+    quote.totalCents,
+    Math.round(MEMBERSHIP_TIERS.twice_monthly.prices["2br_2ba"].monthlyCents * 0.85) +
+      memberRate,
+  );
 });
