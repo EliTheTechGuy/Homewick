@@ -24,15 +24,17 @@ export default function TermsPage() {
         <div className="mt-12 space-y-10">
           <Clause n="1" title="Scope of service">
             <p>
-              Homewick provides residential cleaning for apartments in the{" "}
-              {site.serviceArea}. Cleaning is performed by our staff. Assignments, billing,
-              scheduling, and customer communication are handled by the company. Please
-              direct any request or complaint to Homewick rather than to the cleaner on
-              site. Cleaners are not authorized to negotiate scope, price, or scheduling.
+              Homewick provides residential cleaning for apartments and houses in the{" "}
+              {site.serviceArea}. Cleaning is carried out by cleaners engaged by Homewick.
+              Assignments, billing, scheduling, and customer communication are handled by
+              the company. Please direct any request or complaint to Homewick rather than
+              to the cleaner on site. Cleaners are not authorized to negotiate scope,
+              price, or scheduling.
             </p>
             <p>
-              Single-family homes fall outside the published apartment rates and are quoted
-              separately.
+              Apartments are charged at the rates published on this site. Houses fall
+              outside those rates and are quoted individually by square footage; the
+              quoted price is the agreed price for that booking.
             </p>
           </Clause>
 
@@ -79,8 +81,9 @@ export default function TermsPage() {
           <Clause n="3" title="Pricing and payment">
             <ul>
               <li>
-                Rates are published on this site and charged as published. Cleaners do not
-                quote or collect payment on site.
+                Apartment rates are published on this site and charged as published. House
+                cleaning is quoted individually and charged at the price agreed for that
+                booking. Cleaners do not quote or collect payment on site.
               </li>
               <li>
                 Payment is processed by Stripe. Card details are entered directly with
@@ -151,8 +154,10 @@ export default function TermsPage() {
             </p>
             <p>
               If our cleaner cannot gain entry at the scheduled time, we will attempt to
-              reach you. If entry cannot be obtained, the visit is treated as skipped and
-              consumes its allotment for the period.
+              reach you. If entry cannot be obtained, a membership cleaning is treated as
+              skipped and consumes its allotment for the period, and a one-time cleaning
+              is treated under section 4 as a cancellation with less than{" "}
+              {NO_REFUND_HOURS} hours&apos; notice.
             </p>
           </Clause>
 
@@ -190,10 +195,19 @@ export default function TermsPage() {
 
           <Clause n="9" title="How we contact you">
             <p>
-              We contact you by email about your service: your booking confirmation, a
-              reminder the morning before a visit, and anything we need to ask you about
-              access. These are notifications rather than a support channel, so replies to
-              them are not monitored.
+              We contact you by email about your service. That covers your booking
+              confirmation and payment link, a reminder before a visit, a note when a
+              booking is cancelled and what was refunded, a request for feedback after a
+              clean, and anything we need to ask you about access. These are
+              notifications rather than a support channel, so replies to them are not
+              monitored.
+            </p>
+            <p>
+              Two of our emails are not strictly about a booking you have already made: a
+              monthly reminder to claim the free add-on your membership includes, and a
+              note when a membership ends inviting you to start again. Both carry an
+              unsubscribe link, and using it stops those two without affecting anything
+              you need in order to be cleaned.
             </p>
             <p>
               We do not currently send text messages. If you ticked the box at booking we

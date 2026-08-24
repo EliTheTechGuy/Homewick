@@ -8,7 +8,8 @@ import {
   MEMBERSHIP_TIERS,
   MEMBER_FIRST_MONTH_DISCOUNT,
   PET_SURCHARGE_CENTS,
-  DEEP_CLEAN_INCLUDES,
+  ADD_ONS,
+  SERVICE_INCLUDES,
   SERVICE_PRICES,
   addOnByCode,
   frequencyForVisits,
@@ -778,7 +779,7 @@ test("a deep clean covers the fridge and the cabinets without charging for them"
 
   // Quoted whether or not they were asked for, so the itemised lines and the
   // total describe the same visit.
-  for (const code of DEEP_CLEAN_INCLUDES) {
+  for (const code of SERVICE_INCLUDES.deep) {
     const line = deep.lines.find((l) => l.label.startsWith(addOnByCode(code)!.name));
     assert.ok(line, `${code} should appear on a deep clean quote`);
     assert.equal(line.amountCents, 0, `${code} must not be charged on a deep clean`);
@@ -796,33 +797,63 @@ test("a deep clean covers the fridge and the cabinets without charging for them"
     plan: "one_time",
     unitSize: "2br_2ba",
     serviceType: "deep",
-    addOns: [...DEEP_CLEAN_INCLUDES],
+    addOns: [...SERVICE_INCLUDES.deep],
     hasPets: false,
   });
   assert.equal(ticked.totalCents, deep.totalCents);
   assert.equal(ticked.lines.length, deep.lines.length);
+
+  // And the two it does not cover are still sold on a deep clean.
+  const withOven = quoteFor({
+    plan: "one_time",
+    unitSize: "2br_2ba",
+    serviceType: "deep",
+    addOns: ["oven"],
+    hasPets: false,
+  });
+  assert.equal(withOven.totalCents, deep.totalCents + addOnByCode("oven")!.priceCents);
 });
 
-test("the same add-ons are still sold on the services that do not include them", () => {
-  for (const serviceType of ["standard", "move_out"] as const) {
-    const quote = quoteFor({
-      plan: "one_time",
-      unitSize: "2br_2ba",
-      serviceType,
-      addOns: [...DEEP_CLEAN_INCLUDES],
-      hasPets: false,
-    });
+test("a move in and out clean covers every add-on there is", () => {
+  const quote = quoteFor({
+    plan: "one_time",
+    unitSize: "2br_2ba",
+    serviceType: "move_out",
+    addOns: ADD_ONS.map((a) => a.code),
+    hasPets: false,
+  });
 
-    const extras = DEEP_CLEAN_INCLUDES.reduce(
-      (sum, code) => sum + addOnByCode(code)!.priceCents,
-      0,
-    );
-    assert.equal(
-      quote.totalCents,
-      SERVICE_PRICES["2br_2ba"][serviceType] + extras,
-      `${serviceType} must still charge for the fridge and the cabinets`,
-    );
+  assert.equal(
+    quote.totalCents,
+    SERVICE_PRICES["2br_2ba"].move_out,
+    "asking for every add-on on a move out must not add a cent",
+  );
+  for (const a of ADD_ONS) {
+    const line = quote.lines.find((l) => l.label.startsWith(a.name));
+    assert.ok(line, `${a.code} should be listed`);
+    assert.equal(line.amountCents, 0, `${a.code} must be free on a move out`);
   }
+
+  // Derived from the catalog rather than listed, so a seventh add-on added
+  // tomorrow is covered without anybody remembering to come back here.
+  assert.deepEqual(
+    [...SERVICE_INCLUDES.move_out],
+    ADD_ONS.map((a) => a.code),
+  );
+});
+
+test("a standard clean still sells every add-on, because it includes none", () => {
+  const quote = quoteFor({
+    plan: "one_time",
+    unitSize: "2br_2ba",
+    serviceType: "standard",
+    addOns: ADD_ONS.map((a) => a.code),
+    hasPets: false,
+  });
+
+  const everything = ADD_ONS.reduce((sum, a) => sum + a.priceCents, 0);
+  assert.equal(quote.totalCents, SERVICE_PRICES["2br_2ba"].standard + everything);
+  assert.equal(SERVICE_INCLUDES.standard.length, 0, "upkeep includes no extras");
 });
 
 test("a membership never gets a deep clean's inclusions, because it never bought one", () => {
@@ -833,11 +864,11 @@ test("a membership never gets a deep clean's inclusions, because it never bought
   const quote = quoteFor({
     plan: "membership",
     unitSize: "2br_2ba",
-    addOns: [...DEEP_CLEAN_INCLUDES],
+    addOns: [...SERVICE_INCLUDES.deep],
     hasPets: false,
   });
 
-  const memberRate = DEEP_CLEAN_INCLUDES.reduce(
+  const memberRate = SERVICE_INCLUDES.deep.reduce(
     (sum, code) => sum + Math.round(addOnByCode(code)!.priceCents * 0.9),
     0,
   );
