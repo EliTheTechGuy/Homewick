@@ -15,6 +15,7 @@ import type { MemberOverview } from "@/lib/member-account";
 import type { Member } from "@/lib/member-auth";
 import { Card } from "@/components/ui";
 import { RescheduleVisit } from "./RescheduleVisit";
+import { CancelVisit } from "./CancelVisit";
 import { ProfileSection } from "./ProfileSection";
 
 export function AccountHome({
@@ -188,14 +189,18 @@ export function AccountHome({
             {upcoming.map((v) => (
               <li key={v.id} className="flex flex-wrap items-baseline justify-between gap-x-4 py-3">
                 <span className="text-body">{formatLong(v.onDate)}</span>
-                <RescheduleVisit visit={v} />
+                {/* A one-off is a purchase, so it can be called off for a
+                    refund. A membership cleaning is one the period already
+                    paid for, so it moves rather than cancels. */}
+                {v.isOneOff ? <CancelVisit visit={v} /> : <RescheduleVisit visit={v} />}
               </li>
             ))}
           </ul>
         )}
         <p className="mt-4 text-sm leading-relaxed text-muted">
-          Move a cleaning to whatever day suits you. Whatever you pick becomes your
-          usual day from then on.
+          Move a membership cleaning to whatever day suits you, and whatever you pick
+          becomes your usual day from then on. A one-time clean can be cancelled here,
+          free with 48 hours&apos; notice.
         </p>
       </Card>
 

@@ -2,8 +2,37 @@ import { query, queryOne } from "./db";
 import { TIMEZONE, today } from "./dates";
 import type { UnitSize } from "./pricing";
 import { cancellationEndDate } from "./membership-lifecycle";
+import { cancellationFor, type CancellationTier } from "./cancellation";
 
 /** Everything the member's account page renders, in two queries. */
+
+/**
+ * What cancelling a listed visit would cost, worked out once for both callers.
+ *
+ * Null on a membership cleaning, which has nothing to refund. The number is
+ * computed here rather than in the browser so that what somebody is shown and
+ * what the server does are the same calculation.
+ */
+function cancellationFields(v: {
+  origin: string;
+  scheduled_for: Date;
+  paid_cents: number;
+}): Pick<UpcomingVisit, "isOneOff" | "cancellation"> {
+  if (v.origin !== "one_off") return { isOneOff: false, cancellation: null };
+  const money = cancellationFor({
+    paidCents: v.paid_cents,
+    scheduledFor: v.scheduled_for,
+    now: new Date(),
+  });
+  return {
+    isOneOff: true,
+    cancellation: {
+      refundCents: money.refundCents,
+      feeCents: money.feeCents,
+      tier: money.tier,
+    },
+  };
+}
 
 export type UpcomingVisit = {
   id: string;
@@ -17,6 +46,22 @@ export type UpcomingVisit = {
    * member choosing a date the server will only reject.
    */
   periodEndsOn: string | null;
+  /**
+   * A one-off is a purchase and can be cancelled for a refund. A membership
+   * cleaning is one of the ones the period already paid for, so cancelling it
+   * owes nobody anything and the member moves it instead.
+   */
+  isOneOff: boolean;
+  /**
+   * What cancelling it right now would give back, and what it would keep.
+   * Worked out here rather than in the browser so the number somebody agrees
+   * to is the number the server will use.
+   */
+  cancellation: {
+    refundCents: number;
+    feeCents: number;
+    tier: CancellationTier;
+  } | null;
 };
 
 export type MemberOverview = {
@@ -122,6 +167,9 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
     on_date: string;
     weekday: string;
     status: string;
+    origin: string;
+    scheduled_for: Date;
+    paid_cents: number;
     period_id: string | null;
     period_end: string | null;
   }>(
@@ -129,6 +177,10 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
             (v.scheduled_for at time zone $2)::date::text as on_date,
             to_char(v.scheduled_for at time zone $2, 'Dy') as weekday,
             v.status::text as status,
+            v.origin::text as origin,
+            v.scheduled_for,
+            (v.base_amount_cents + v.pet_surcharge_cents + v.addons_amount_cents)
+              as paid_cents,
             v.period_id,
             sp.period_end::text as period_end
        from visits v
@@ -154,6 +206,7 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
         status: v.status,
         inCurrentPeriod: false,
         periodEndsOn: v.period_end,
+        ...cancellationFields(v),
       })),
       hasStripeCustomer: false,
       property: null,
@@ -261,6 +314,7 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
       status: v.status,
       inCurrentPeriod: Boolean(period && v.period_id === period.id),
       periodEndsOn: v.period_end,
+      ...cancellationFields(v),
     })),
     hasStripeCustomer: Boolean(sub.stripe_customer_id),
     property: {

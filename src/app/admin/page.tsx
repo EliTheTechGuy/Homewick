@@ -7,6 +7,7 @@ import { unitSizeLabel, type UnitSize } from "@/lib/pricing";
 import { RevealAccess } from "@/components/RevealAccess";
 import { MarkComplete } from "@/components/MarkComplete";
 import { MarkSkipped } from "@/components/MarkSkipped";
+import { CancelVisitAdmin } from "@/components/admin/CancelVisitAdmin";
 import { AssignCleaner, type CleanerOption } from "@/components/admin/AssignCleaner";
 import { MonthCalendar, type DayCount } from "@/components/admin/MonthCalendar";
 import { UpcomingRail, type UpcomingRow } from "@/components/admin/UpcomingRail";
@@ -247,6 +248,12 @@ export default async function AdminTodayPage({
                     <>
                       <MarkComplete visitId={visit.id} />
                       <MarkSkipped visitId={visit.id} />
+                      {/* One-off only. A membership cleaning is one the
+                          period already paid for, so there is nothing to
+                          refund and Skipped is the right word for it. */}
+                      {visit.origin === "one_off" && (
+                        <CancelVisitAdmin visitId={visit.id} />
+                      )}
                     </>
                   )}
                 </div>

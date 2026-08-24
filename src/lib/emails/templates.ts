@@ -1,5 +1,6 @@
 import { emailLayout, emailText, type Row } from "./layout";
 import { formatLong, type ISODate } from "../dates";
+import type { CancellationTier } from "../cancellation";
 import { formatCents } from "../money";
 import { site } from "../site";
 import { serviceTypeLabel, unitSizeLabel, type ServiceType, type UnitSize } from "../pricing";
@@ -199,6 +200,82 @@ export function cancellationConfirmedEmail(params: {
     ],
     footerNote:
       "You can still book a one-time clean any time, at the standard rate.",
+  });
+}
+
+/**
+ * A one-time clean called off, and what happened to the money.
+ *
+ * The refund is the point of the message. Somebody who cancels and hears
+ * nothing assumes they have been charged for nothing, and the next thing that
+ * happens is a chargeback rather than a question.
+ *
+ * The fee is stated with its reason rather than deducted quietly. A number
+ * that appears on a card statement with no explanation attached to it is how
+ * an ordinary cancellation becomes a dispute.
+ */
+export function visitCanceledEmail(params: {
+  firstName: string;
+  serviceType: ServiceType;
+  /**
+   * The local calendar date, formatted by Postgres rather than converted here.
+   * A timestamp turned into a date in JavaScript is how 9am became 4am in this
+   * codebase once already.
+   */
+  onDate: ISODate;
+  refundCents: number;
+  feeCents: number;
+  tier: CancellationTier;
+}): Composed {
+  const rows: Row[] = [
+    { label: "Was booked for", value: formatLong(params.onDate) },
+    { label: "Service", value: serviceTypeLabel(params.serviceType) },
+  ];
+
+  if (params.feeCents > 0) {
+    rows.push({ label: "Late cancellation fee", value: formatCents(params.feeCents) });
+  }
+  rows.push({
+    label: "Refund",
+    value: params.refundCents > 0 ? formatCents(params.refundCents) : "None",
+  });
+
+  const body: string[] = [];
+  if (params.refundCents > 0) {
+    body.push(
+      "The refund goes back to the card you paid with. Banks usually take a few working days to show it, and it may appear as a separate line rather than as the original charge disappearing.",
+    );
+  }
+
+  // The reason travels with the number. A deduction that turns up on a
+  // statement with nothing attached to it is how an ordinary cancellation
+  // becomes a call to the bank instead of a call to us.
+  if (params.tier === "half") {
+    body.push(
+      `Half the price is kept when a clean is called off inside 48 hours. By then the day is set aside and a cleaner has usually been told to be there. Cancel more than 48 hours ahead and there is no fee at all.`,
+    );
+  }
+  if (params.tier === "full") {
+    body.push(
+      "Inside 24 hours a cleaning is not refunded. The cleaner is already booked for it and the slot cannot be filled that late, so it is paid for either way.",
+    );
+    body.push(
+      "If you think that is wrong in this case, get in touch and tell us what happened. We would rather hear it from you.",
+    );
+  }
+
+  body.push("Book again whenever you like. Nothing here stops you.");
+
+  return compose({
+    subject: "Your cleaning is cancelled",
+    heading: `That is cancelled, ${params.firstName}`,
+    intro:
+      "We have taken it off the schedule and nobody will be turning up. Here is where it leaves things.",
+    rows,
+    body,
+    cta: { label: "Book another clean", url: `${site.url}/book` },
+    footerNote:
+      "If you did not ask for this, get in touch straight away and we will put it back.",
   });
 }
 

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Section } from "@/components/ui";
 import { formatCents } from "@/lib/money";
 import { MEMBERSHIP_TIERS, PET_SURCHARGE_CENTS } from "@/lib/pricing";
+import { FREE_CANCELLATION_HOURS, NO_REFUND_HOURS } from "@/lib/cancellation";
 import { TERMS_VERSION, site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -108,6 +109,36 @@ export default function TermsPage() {
               service continues through the end of the following period. Cleanings continue
               to be scheduled and delivered up to the end date, and the membership is not
               refunded on a partial-period basis.
+            </p>
+            <p>
+              A one-time cleaning may be cancelled from your account at any time before
+              it takes place. What is retained depends on the notice given, measured
+              from the scheduled start of the visit:
+            </p>
+            <ul>
+              <li>
+                {FREE_CANCELLATION_HOURS} hours&apos; notice or more: refunded in full,
+                with no fee.
+              </li>
+              <li>
+                Between {NO_REFUND_HOURS} and {FREE_CANCELLATION_HOURS} hours&apos;
+                notice: 50% of the price paid is retained and the balance refunded.
+              </li>
+              <li>
+                Less than {NO_REFUND_HOURS} hours&apos; notice: the full price is
+                retained and no refund is due.
+              </li>
+            </ul>
+            <p>
+              Being unable to gain lawful entry at the scheduled time is treated as a
+              cancellation with less than {NO_REFUND_HOURS} hours&apos; notice. The
+              cleaner has travelled and the appointment cannot be resold. If you are
+              locked out through no fault of your own, get in touch and we will look at
+              it, but the entitlement above is what this agreement provides.
+            </p>
+            <p>
+              Refunds are issued to the original payment method and are typically
+              visible within a few working days, depending on the card issuer.
             </p>
           </Clause>
 
