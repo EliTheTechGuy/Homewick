@@ -9,7 +9,7 @@ import { sendOnce } from "@/lib/emails/send-once";
 import { cleanerAssignmentEmail } from "@/lib/emails/templates";
 import { site } from "@/lib/site";
 import { visitUrl } from "@/lib/visit-links";
-import type { ServiceType, UnitSize } from "@/lib/pricing";
+import { propertyLabel, type ServiceType, type UnitSize } from "@/lib/pricing";
 
 type Result = { ok: boolean; message: string };
 
@@ -202,7 +202,9 @@ export async function notifyCleaner(
       customer_last: string;
       customer_phone: string;
       service_type: ServiceType;
-      unit_size: UnitSize;
+      unit_size: UnitSize | null;
+      bedrooms: number | null;
+      bathrooms: string | null;
       has_pets: boolean;
       on_date: string;
       at_time: string;
@@ -216,7 +218,7 @@ export async function notifyCleaner(
     }>(
       `select cl.first_name as cleaner_first, cl.email::text as cleaner_email,
               c.first_name as customer_first, c.last_name as customer_last, c.phone as customer_phone,
-              v.service_type, p.unit_size, p.has_pets,
+              v.service_type, p.unit_size, p.bedrooms, p.bathrooms, p.has_pets,
               (v.scheduled_for at time zone $2)::date::text as on_date,
               to_char(v.scheduled_for at time zone $2, 'HH12:MI AM') as at_time,
               p.line1, p.line2, p.city, p.postal_code,
@@ -247,7 +249,11 @@ export async function notifyCleaner(
         customerName: `${row.customer_first} ${row.customer_last}`,
         customerPhone: row.customer_phone,
         serviceType: row.service_type,
-        unitSize: row.unit_size,
+        property: propertyLabel({
+          unitSize: row.unit_size,
+          bedrooms: row.bedrooms,
+          bathrooms: row.bathrooms,
+        }),
         onDate: row.on_date,
         atTime: row.at_time,
         address: [row.line1, row.line2, `${row.city}, TX ${row.postal_code}`]

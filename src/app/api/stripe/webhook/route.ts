@@ -5,6 +5,7 @@ import { TIMEZONE } from "@/lib/dates";
 import {
   frequencyForVisits,
   membershipTier,
+  propertyLabel,
   type ServiceType,
   type UnitSize,
 } from "@/lib/pricing";
@@ -278,7 +279,9 @@ async function sendOneTimeConfirmation(
       first_name: string;
       email: string;
       service_type: ServiceType;
-      unit_size: UnitSize;
+      unit_size: UnitSize | null;
+      bedrooms: number | null;
+      bathrooms: string | null;
       on_date: string;
       line1: string;
       line2: string | null;
@@ -286,7 +289,7 @@ async function sendOneTimeConfirmation(
       postal_code: string;
     }>(
       `select c.id as customer_id, c.first_name, c.email::text as email,
-              v.service_type, p.unit_size,
+              v.service_type, p.unit_size, p.bedrooms, p.bathrooms,
               (v.scheduled_for at time zone $2)::date::text as on_date,
               p.line1, p.line2, p.city, p.postal_code
          from visits v
@@ -305,7 +308,11 @@ async function sendOneTimeConfirmation(
       message: oneTimeBookingEmail({
         firstName: row.first_name,
         serviceType: row.service_type,
-        unitSize: row.unit_size,
+        property: propertyLabel({
+          unitSize: row.unit_size,
+          bedrooms: row.bedrooms,
+          bathrooms: row.bathrooms,
+        }),
         onDate: row.on_date,
         address: [row.line1, row.line2, `${row.city}, TX ${row.postal_code}`]
           .filter(Boolean)
@@ -329,7 +336,9 @@ async function sendMembershipWelcome(
       customer_id: string;
       first_name: string;
       email: string;
-      unit_size: UnitSize;
+      unit_size: UnitSize | null;
+      bedrooms: number | null;
+      bathrooms: string | null;
       monthly_amount_cents: number;
       visits_per_period: number;
       interval_days: number | null;
@@ -339,7 +348,8 @@ async function sendMembershipWelcome(
       postal_code: string;
     }>(
       `select c.id as customer_id, c.first_name, c.email::text as email,
-              s.unit_size, s.monthly_amount_cents, s.visits_per_period, s.interval_days,
+              s.unit_size, p.bedrooms, p.bathrooms,
+              s.monthly_amount_cents, s.visits_per_period, s.interval_days,
               p.line1, p.line2, p.city, p.postal_code
          from subscriptions s
          join customers c on c.id = s.customer_id
@@ -371,10 +381,15 @@ async function sendMembershipWelcome(
       customerId: row.customer_id,
       message: membershipWelcomeEmail({
         firstName: row.first_name,
-        unitSize: row.unit_size,
+        property: propertyLabel({
+          unitSize: row.unit_size,
+          bedrooms: row.bedrooms,
+          bathrooms: row.bathrooms,
+        }),
         visitsPerPeriod: row.visits_per_period,
         freeAddOn: frequency ? membershipTier(frequency).freeAddOn : false,
         monthlyAmountCents: row.monthly_amount_cents,
+        intervalDays: row.interval_days,
         firstPaymentCents: session.amount_total ?? 0,
         visitDates: visits.map((v) => v.on_date),
         address: [row.line1, row.line2, `${row.city}, TX ${row.postal_code}`]
@@ -411,7 +426,9 @@ async function sendOwnerAlert(
       last_name: string;
       phone: string;
       service_type: ServiceType;
-      unit_size: UnitSize;
+      unit_size: UnitSize | null;
+      bedrooms: number | null;
+      bathrooms: string | null;
       has_pets: boolean;
       on_date: string;
       line1: string;
@@ -422,7 +439,7 @@ async function sendOwnerAlert(
       add_ons: string[] | null;
     }>(
       `select c.first_name, c.last_name, c.phone,
-              v.service_type, p.unit_size, p.has_pets,
+              v.service_type, p.unit_size, p.bedrooms, p.bathrooms, p.has_pets,
               (v.scheduled_for at time zone $2)::date::text as on_date,
               p.line1, p.line2, p.city, p.postal_code,
               v.customer_instructions,
@@ -450,7 +467,11 @@ async function sendOwnerAlert(
         customerName: `${row.first_name} ${row.last_name}`,
         customerPhone: row.phone,
         serviceType: row.service_type,
-        unitSize: row.unit_size,
+        property: propertyLabel({
+          unitSize: row.unit_size,
+          bedrooms: row.bedrooms,
+          bathrooms: row.bathrooms,
+        }),
         onDate: row.on_date,
         address: [row.line1, row.line2, `${row.city}, TX ${row.postal_code}`]
           .filter(Boolean)

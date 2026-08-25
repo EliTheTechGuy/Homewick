@@ -23,7 +23,8 @@ function compose(opts: Parameters<typeof emailLayout>[0] & { subject: string }):
 export function oneTimeBookingEmail(params: {
   firstName: string;
   serviceType: ServiceType;
-  unitSize: UnitSize;
+  /** Already formatted: a bracket for an apartment, a shape for a house. */
+  property: string;
   onDate: ISODate;
   address: string;
   amountCents: number;
@@ -32,7 +33,7 @@ export function oneTimeBookingEmail(params: {
     { label: "Service", value: serviceTypeLabel(params.serviceType) },
     { label: "Date", value: formatLong(params.onDate) },
     { label: "Where", value: params.address },
-    { label: "Apartment", value: unitSizeLabel(params.unitSize) },
+    { label: "Property", value: params.property },
     { label: "Paid", value: formatCents(params.amountCents) },
   ];
 
@@ -400,21 +401,36 @@ export function membershipEndedEmail(params: {
  */
 export function membershipWelcomeEmail(params: {
   firstName: string;
-  unitSize: UnitSize;
+  /** Already formatted: a bracket for an apartment, a shape for a house. */
+  property: string;
   visitsPerPeriod: number;
   freeAddOn: boolean;
   monthlyAmountCents: number;
+  /**
+   * Days between charges, or null for the published monthly membership.
+   *
+   * Without this the email said "a month" to everybody, which for somebody on
+   * a 21 day cadence is seventeen charges a year described as twelve. The
+   * account page was fixed for this and the welcome email was not, so the very
+   * first thing a hand-entered customer read was the wrong number.
+   */
+  intervalDays: number | null;
   firstPaymentCents: number;
   visitDates: ISODate[];
   address: string;
 }): Composed {
   const cleanings =
     params.visitsPerPeriod === 1 ? "one cleaning" : `${params.visitsPerPeriod} cleanings`;
+  // "a month", "every 3 weeks", whatever they were actually signed up for.
+  const cadence = cadenceLabel(params.intervalDays);
 
   const rows: Row[] = [
-    { label: "Membership", value: unitSizeLabel(params.unitSize) },
+    { label: "Membership", value: params.property },
     { label: "Paid today", value: formatCents(params.firstPaymentCents) },
-    { label: "Then monthly", value: formatCents(params.monthlyAmountCents) },
+    {
+      label: "Then",
+      value: `${formatCents(params.monthlyAmountCents)} ${cadenceLabel(params.intervalDays)}`,
+    },
     { label: "Where", value: params.address },
   ];
 
@@ -428,18 +444,18 @@ export function membershipWelcomeEmail(params: {
     ? [
         "<strong>Your free add-on.</strong> Every month you can add one extra job at no cost. Inside the oven, the fridge, interior windows, or the balcony. It is not automatic, so choose it in your account and it will reach your cleaner as part of the job.",
         "It resets each month and does not carry over, so it is worth picking one each time.",
-        `${cleanings.charAt(0).toUpperCase()}${cleanings.slice(1)} a month, roughly a fortnight apart, on the weekday you chose. Need to move one? Get in touch and we will shift it within the month.`,
+        `${cleanings.charAt(0).toUpperCase()}${cleanings.slice(1)} ${cadence}, roughly a fortnight apart, on the weekday you chose. Need to move one? Get in touch and we will shift it within your billing period.`,
       ]
     : [
-        "<strong>Your cleaning day.</strong> One clean a month, on the weekday you chose. Need to move it? Get in touch and we will shift it within the month.",
-        "It does not carry over, so a month you skip is a month gone rather than two cleans banked for later.",
+        `<strong>Your cleaning day.</strong> One clean ${cadence}, on the weekday you chose. Need to move it? Get in touch and we will shift it within your billing period.`,
+        "It does not carry over, so a period you skip is a period gone rather than two cleans banked for later.",
         "Add-ons are 10% off for members, and you can add one to any visit from your account.",
       ];
 
   return compose({
     subject: `Welcome to Homewick, ${params.firstName}`,
     heading: `Welcome, ${params.firstName}`,
-    intro: `Your membership is active and your ${params.visitsPerPeriod === 1 ? "first cleaning is" : "first cleanings are"} booked. One charge a month, ${cleanings}, nothing to arrange in between.`,
+    intro: `Your membership is active and your ${params.visitsPerPeriod === 1 ? "first cleaning is" : "first cleanings are"} booked. One charge ${cadence}, ${cleanings}, nothing to arrange in between.`,
     rows,
     body,
     cta: params.freeAddOn
@@ -466,7 +482,8 @@ export function newBookingAlertEmail(params: {
   customerName: string;
   customerPhone: string;
   serviceType: ServiceType;
-  unitSize: UnitSize;
+  /** Already formatted: a bracket for an apartment, a shape for a house. */
+  property: string;
   onDate: ISODate;
   address: string;
   amountCents: number;
@@ -485,7 +502,7 @@ export function newBookingAlertEmail(params: {
     },
     { label: "When", value: formatLong(params.onDate) },
     { label: "Where", value: params.address },
-    { label: "Apartment", value: unitSizeLabel(params.unitSize) },
+    { label: "Property", value: params.property },
     { label: "Service", value: serviceTypeLabel(params.serviceType) },
     { label: "Customer", value: `${params.customerName}, ${params.customerPhone}` },
     { label: "Paid", value: formatCents(params.amountCents) },
@@ -548,7 +565,8 @@ export function cleanerAssignmentEmail(params: {
   customerName: string;
   customerPhone: string;
   serviceType: ServiceType;
-  unitSize: UnitSize;
+  /** Already formatted: a bracket for an apartment, a shape for a house. */
+  property: string;
   onDate: ISODate;
   atTime: string;
   address: string;
@@ -563,7 +581,7 @@ export function cleanerAssignmentEmail(params: {
   const rows: Row[] = [
     { label: "When", value: `${formatLong(params.onDate)}, ${params.atTime}` },
     { label: "Where", value: params.address },
-    { label: "Apartment", value: unitSizeLabel(params.unitSize) },
+    { label: "Property", value: params.property },
     { label: "Job", value: serviceTypeLabel(params.serviceType) },
     { label: "Customer", value: `${params.customerName}, ${params.customerPhone}` },
   ];
