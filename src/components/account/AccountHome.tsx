@@ -91,8 +91,11 @@ export function AccountHome({
         <h2 className="text-lg font-semibold text-navy">Your membership</h2>
         {subscription ? (
           <>
+            {/* A house has no apartment bracket, so there is nothing to put
+                here and the separator goes with it. Previously this rendered
+                an empty label followed by a stray middle dot. */}
             <p className="mt-2 text-body">
-              {unitSizeLabel(subscription.unitSize)} ·{" "}
+              {subscription.unitSize && `${unitSizeLabel(subscription.unitSize)} · `}
               {formatCents(subscription.monthlyAmountCents)}{" "}
               {cadenceLabel(subscription.intervalDays)}
             </p>
