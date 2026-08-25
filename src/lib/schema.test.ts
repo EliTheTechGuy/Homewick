@@ -1233,3 +1233,83 @@ test("a membership past its end date is closed, so the customer can come back", 
   // Running twice changes nothing, which matters because the cron retries.
   assert.equal(await closeEndedMemberships(asClient(db), today), 0);
 });
+
+test("the free add-on rule means the same thing in Postgres as it does in code", async () => {
+  const { FREE_ADD_ON_NUDGE_SQL, FREE_ADD_ON_VISIT_COUNTS } = await import(
+    "./emails/scheduled"
+  );
+  const { subscriptionIncludesFreeAddOn } = await import("./pricing");
+  const today = "2027-08-10";
+
+  // Every combination that can decide this: a decision made for the customer,
+  // a published tier, and a cadence agreed by hand. The nudge query and the
+  // function are written separately, one in SQL and one in TypeScript, and
+  // they have to reach the same answer for all twelve.
+  const cases: { override: boolean | null; intervalDays: number | null; visits: number }[] =
+    [];
+  for (const override of [null, true, false]) {
+    for (const intervalDays of [null, 21]) {
+      for (const visits of [1, 2]) {
+        cases.push({ override, intervalDays, visits });
+      }
+    }
+  }
+
+  const made: { id: string; periodId: string; expected: boolean; label: string }[] = [];
+  for (const [i, c] of cases.entries()) {
+    const { customerId, propertyId } = await seedCustomer(`rule${i}@example.com`);
+    const id = await insertSubscription(customerId, propertyId, "2027-08-01", 1);
+    await db.query(
+      `update subscriptions
+          set status = 'active', visits_per_period = $2, interval_days = $3,
+              free_add_on_override = $4
+        where id = $1`,
+      [id, c.visits, c.intervalDays, c.override],
+    );
+    const period = await db.query<{ id: string }>(
+      `insert into subscription_periods
+         (subscription_id, period_start, period_end, visits_allotted, amount_cents)
+       values ($1, '2027-08-01', '2027-09-01', $2, 26900) returning id`,
+      [id, c.visits],
+    );
+    await db.query(
+      `insert into visits (customer_id, property_id, subscription_id, period_id,
+                           origin, service_type, status, scheduled_for)
+       values ($1, $2, $3, $4, 'membership', 'standard', 'scheduled',
+               '2027-08-20 09:00-05')`,
+      [customerId, propertyId, id, period.rows[0].id],
+    );
+
+    made.push({
+      id,
+      periodId: period.rows[0].id,
+      expected: subscriptionIncludesFreeAddOn({
+        intervalDays: c.intervalDays,
+        visitsPerPeriod: c.visits,
+        freeAddOnOverride: c.override,
+      }),
+      label: `override=${c.override} interval=${c.intervalDays} visits=${c.visits}`,
+    });
+  }
+
+  const { rows } = await db.query<{ period_id: string }>(FREE_ADD_ON_NUDGE_SQL, [
+    today,
+    2,
+    "America/Chicago",
+    FREE_ADD_ON_VISIT_COUNTS,
+  ]);
+  const nudged = new Set(rows.map((r) => r.period_id));
+
+  for (const m of made) {
+    assert.equal(
+      nudged.has(m.periodId),
+      m.expected,
+      `${m.label}: the query and the function disagree`,
+    );
+  }
+
+  // And the answers are not all the same, which would make the above pass
+  // while proving nothing.
+  assert.ok(made.some((m) => m.expected));
+  assert.ok(made.some((m) => !m.expected));
+});

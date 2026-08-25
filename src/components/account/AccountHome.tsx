@@ -31,8 +31,14 @@ export function AccountHome({
   const [confirmingCancel, setConfirmingCancel] = useState(false);
 
   const { subscription, currentPeriod, upcoming } = overview;
+  // Entitlement first. A hand-agreed arrangement does not include the add-on
+  // unless somebody decided it does, and offering one that the server would
+  // then refuse is worse than not mentioning it.
   const perkAvailable =
-    Boolean(currentPeriod) && !currentPeriod!.freeAddOnUsed && Boolean(overview.claimableVisitId);
+    Boolean(subscription?.freeAddOnIncluded) &&
+    Boolean(currentPeriod) &&
+    !currentPeriod!.freeAddOnUsed &&
+    Boolean(overview.claimableVisitId);
 
   function claim() {
     if (!choice) return;
@@ -122,7 +128,7 @@ export function AccountHome({
       </Card>
 
       {/* Free add-on */}
-      {subscription && (
+      {subscription?.freeAddOnIncluded && (
         <Card className="mt-6">
           <h2 className="text-lg font-semibold text-navy">This month&apos;s free add-on</h2>
 
