@@ -75,7 +75,12 @@ export function ProfileSection({ overview }: { overview: MemberOverview }) {
       )}
 
       <div className="mt-6 border-t border-hairline pt-6">
-        {subscription.intervalDays == null ? (
+        {/* Sizes only exist for an apartment on a published rate. A house has
+            no bracket to choose between, and a schedule agreed by hand has no
+            published rate to move to, so either one gets the panel below
+            instead. Both conditions are checked rather than relying on houses
+            always having been entered with a cadence. */}
+        {subscription.intervalDays == null && subscription.unitSize ? (
           <SizeChooser
             current={subscription.unitSize}
             currentRateCents={subscription.monthlyAmountCents}

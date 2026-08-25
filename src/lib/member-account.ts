@@ -69,7 +69,14 @@ export type MemberOverview = {
     id: string;
     status: string;
     monthlyAmountCents: number;
-    unitSize: UnitSize;
+    /**
+     * Null on a house. Houses are quoted on square footage and have no
+     * apartment bracket, which the schema has allowed since houses arrived.
+     * This was typed as always present, so the account page rendered an empty
+     * label and a dangling separator to exactly the customers who were
+     * entered by hand.
+     */
+    unitSize: UnitSize | null;
     /**
      * Null is the published monthly membership. A value means a cadence
      * arranged by hand, which changes what the amount above actually means:
