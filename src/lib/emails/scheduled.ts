@@ -346,16 +346,20 @@ export const FREE_ADD_ON_NUDGE_SQL = `select sp.id as period_id, c.id as custome
        ) v on true
       where s.status in ('active', 'pending_cancellation')
         and c.nudge_opt_out_at is null
-        -- Only tiers that actually include a free add-on. Nothing marks a
-        -- period as having no perk to claim, so free_addon_used stays false
-        -- for ever on a tier without one, and this query would have offered a
-        -- once-a-month member a free oven clean every single month that the
+        -- Only subscriptions that actually include a free add-on. Nothing
+        -- marks a period as having no perk to claim, so free_addon_used stays
+        -- false for ever on a tier without one, and this query would have
+        -- offered a once-a-month member a free oven clean every month that the
         -- booking form and the checkout both correctly refuse to give them.
         --
-        -- A cadence agreed by hand is excluded for the same reason. Those are
-        -- priced individually and no free add-on was ever part of the deal.
-        and s.interval_days is null
-        and s.visits_per_period = any($4::int[])
+        -- The same three answers as subscriptionIncludesFreeAddOn, in the same
+        -- order: a decision made for this customer wins, then the tier, then
+        -- no. Written twice because one runs in Postgres and the other in
+        -- TypeScript, and a test drives both to make sure they agree.
+        and coalesce(
+              s.free_add_on_override,
+              (s.interval_days is null and s.visits_per_period = any($4::int[]))
+            )
         and sp.free_addon_used = false
         and sp.period_start <= ($1::date - $2::int)
         and sp.period_end > $1::date`;

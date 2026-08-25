@@ -1,6 +1,6 @@
 import { query, queryOne } from "./db";
 import { TIMEZONE, today } from "./dates";
-import type { UnitSize } from "./pricing";
+import { subscriptionIncludesFreeAddOn, type UnitSize } from "./pricing";
 import { cancellationEndDate } from "./membership-lifecycle";
 import { cancellationFor, type CancellationTier } from "./cancellation";
 
@@ -78,6 +78,12 @@ export type MemberOverview = {
     intervalDays: number | null;
     /** Cleanings the period includes, which is what tells the two tiers apart. */
     visitsPerPeriod: number;
+    /**
+     * Whether this membership includes the free monthly add-on, after any
+     * decision made for this customer specifically. Resolved here so the
+     * account page and the server action cannot disagree about it.
+     */
+    freeAddOnIncluded: boolean;
     endsOn: string | null;
     /**
      * What the end date would be if they cancelled today. Shown before they
@@ -130,6 +136,7 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
     billing_day: number;
     interval_days: number | null;
     visits_per_period: number;
+    free_add_on_override: boolean | null;
     pet_surcharge_cents: number;
     preferred_weekday: number | null;
     stripe_customer_id: string | null;
@@ -146,7 +153,8 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
   }>(
     `select s.id, s.status::text as status, s.monthly_amount_cents, s.unit_size,
             s.ends_on::text as ends_on, s.started_on::text as started_on,
-            s.billing_day, s.interval_days, s.visits_per_period, s.pet_surcharge_cents,
+            s.billing_day, s.interval_days, s.visits_per_period, s.free_add_on_override,
+            s.pet_surcharge_cents,
             s.preferred_weekday, c.stripe_customer_id,
             s.pending_amount_cents,
             s.pending_amount_effective_on::text as pending_amount_effective_on,
@@ -276,6 +284,11 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
       /** Null is the ordinary monthly membership. A value is a custom cadence. */
       intervalDays: sub.interval_days,
       visitsPerPeriod: sub.visits_per_period,
+      freeAddOnIncluded: subscriptionIncludesFreeAddOn({
+        intervalDays: sub.interval_days,
+        visitsPerPeriod: sub.visits_per_period,
+        freeAddOnOverride: sub.free_add_on_override,
+      }),
       endsOn: sub.ends_on,
       wouldEndOn: cancellationEndDate({
         id: sub.id,

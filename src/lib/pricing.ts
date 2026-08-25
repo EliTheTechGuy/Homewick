@@ -192,6 +192,34 @@ export function onboardingServiceType(frequency: MembershipFrequency): ServiceTy
   return MEMBERSHIP_TIERS[frequency].onboardingDeepClean ? "deep" : "standard";
 }
 
+/**
+ * Whether a subscription includes the free monthly add-on.
+ *
+ * Three answers folded into one, in order of authority.
+ *
+ * An override decides it outright. That is how an arrangement agreed in a
+ * phone call records what was actually promised, in either direction, since
+ * nothing else in the system can know what was said.
+ *
+ * Otherwise a published tier decides it, which keeps every ordinary membership
+ * following one rule rather than carrying a copy of that rule on each row,
+ * free to drift from it.
+ *
+ * Otherwise nobody decided and the answer is no. A cadence agreed by hand was
+ * priced individually and a free add-on was never part of it by default.
+ */
+export function subscriptionIncludesFreeAddOn(sub: {
+  intervalDays: number | null;
+  visitsPerPeriod: number;
+  freeAddOnOverride: boolean | null;
+}): boolean {
+  if (sub.freeAddOnOverride !== null) return sub.freeAddOnOverride;
+
+  const frequency =
+    sub.intervalDays == null ? frequencyForVisits(sub.visitsPerPeriod) : null;
+  return frequency ? MEMBERSHIP_TIERS[frequency].freeAddOn : false;
+}
+
 /** What a new member pays today. Their second month onward is the full rate. */
 export function firstMonthCents(
   size: UnitSize,

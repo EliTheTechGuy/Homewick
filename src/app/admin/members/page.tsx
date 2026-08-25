@@ -4,7 +4,13 @@ import { query } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-page";
 import { TIMEZONE, formatLong } from "@/lib/dates";
 import { formatCents } from "@/lib/money";
-import { unitSizeLabel, type UnitSize } from "@/lib/pricing";
+import {
+  subscriptionIncludesFreeAddOn,
+  unitSizeLabel,
+  type UnitSize,
+} from "@/lib/pricing";
+import { cadenceLabel } from "@/lib/cadence";
+import { FreeAddOnToggle } from "@/components/admin/FreeAddOnToggle";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -19,7 +25,11 @@ type MemberRow = {
   last_name: string;
   email: string;
   phone: string;
-  unit_size: UnitSize;
+  /** Null on a house, which is quoted on square footage and has no bracket. */
+  unit_size: UnitSize | null;
+  interval_days: number | null;
+  visits_per_period: number;
+  free_add_on_override: boolean | null;
   monthly_amount_cents: number;
   pending_amount_cents: number | null;
   pending_amount_effective_on: string | null;
@@ -43,6 +53,7 @@ export default async function MembersPage() {
     `select s.id as subscription_id, s.status::text as status,
             c.first_name, c.last_name, c.email::text as email, c.phone,
             s.unit_size, s.monthly_amount_cents,
+            s.interval_days, s.visits_per_period, s.free_add_on_override,
             s.pending_amount_cents,
             s.pending_amount_effective_on::text as pending_amount_effective_on,
             s.started_on::text as started_on, s.ends_on::text as ends_on,
@@ -104,7 +115,17 @@ export default async function MembersPage() {
       ) : (
         <ul className="mt-8 space-y-4">
           {members.map((m) => {
-            const perkOutstanding = m.visits_allotted !== null && !m.free_addon_used;
+            const perkIncluded = subscriptionIncludesFreeAddOn({
+              intervalDays: m.interval_days,
+              visitsPerPeriod: m.visits_per_period,
+              freeAddOnOverride: m.free_add_on_override,
+            });
+            // Only outstanding if they are owed one. This chip used to appear
+            // against every membership with an unclaimed period, including the
+            // ones that never had an add-on to claim, so it read as a job to
+            // chase that did not exist.
+            const perkOutstanding =
+              perkIncluded && m.visits_allotted !== null && !m.free_addon_used;
 
             return (
               <li
@@ -136,7 +157,10 @@ export default async function MembersPage() {
                       {formatCents(m.monthly_amount_cents)}
                       <span className="font-normal text-muted"> a month</span>
                     </p>
-                    <p className="text-sm text-muted">{unitSizeLabel(m.unit_size)}</p>
+                    <p className="text-sm text-muted">
+                      {m.unit_size ? unitSizeLabel(m.unit_size) : "House"}
+                      {m.interval_days != null && `, ${cadenceLabel(m.interval_days)}`}
+                    </p>
                     <p className="mt-1 text-xs text-muted">
                       Since {formatLong(m.started_on)}
                     </p>
@@ -170,6 +194,12 @@ export default async function MembersPage() {
                     <Chip tone="warn">Nothing scheduled</Chip>
                   )}
                 </div>
+
+                <FreeAddOnToggle
+                  subscriptionId={m.subscription_id}
+                  override={m.free_add_on_override}
+                  effective={perkIncluded}
+                />
               </li>
             );
           })}

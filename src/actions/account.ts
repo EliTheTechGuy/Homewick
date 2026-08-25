@@ -156,6 +156,17 @@ export async function chooseFreeAddOn(
   if (!code.success) return { ok: false, message: "Choose an add-on." };
 
   const overview = await memberOverview(member.customerId);
+
+  // Checked here as well as hidden in the account page, because this is a
+  // server action and a hidden control is not a guard. It decides whether a
+  // job worth up to $30 is done for nothing.
+  if (!overview.subscription?.freeAddOnIncluded) {
+    return {
+      ok: false,
+      message:
+        "Your arrangement does not include a free monthly add-on. Get in touch if you think it should.",
+    };
+  }
   if (!overview.currentPeriod) {
     return { ok: false, message: "You do not have an active membership period." };
   }
