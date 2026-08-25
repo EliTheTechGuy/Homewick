@@ -322,6 +322,38 @@ export function unitSizeLabel(size: UnitSize): string {
   return UNIT_SIZES.find((u) => u.id === size)?.label ?? size;
 }
 
+/**
+ * How to describe a property in one line, for an email or a job sheet.
+ *
+ * An apartment is its bracket, which is the thing it is priced by. A house has
+ * no bracket, so it is described by what it actually is. Every email used
+ * unitSizeLabel directly under a heading of "Apartment", which for a house
+ * printed an empty value beside the wrong word: the cleaner heading to a four
+ * bedroom house was told "Apartment:" and nothing else.
+ *
+ * Bedrooms and bathrooms are optional because a house entered before those
+ * fields existed has neither, and "House" alone is still better than blank.
+ * Bathrooms come out of Postgres as a numeric, so 3 arrives as "3.0" and has
+ * to lose the tail before anybody reads it.
+ */
+export function propertyLabel(p: {
+  unitSize: UnitSize | null;
+  bedrooms?: number | null;
+  bathrooms?: number | string | null;
+}): string {
+  if (p.unitSize) return unitSizeLabel(p.unitSize);
+
+  const parts: string[] = [];
+  if (p.bedrooms != null) parts.push(`${p.bedrooms} bed`);
+  if (p.bathrooms != null) {
+    const n = Number(p.bathrooms);
+    if (Number.isFinite(n)) {
+      parts.push(`${Number.isInteger(n) ? n : n.toFixed(1)} bath`);
+    }
+  }
+  return parts.length ? `House, ${parts.join(" ")}` : "House";
+}
+
 export function serviceTypeLabel(type: ServiceType): string {
   return SERVICE_TYPES.find((s) => s.id === type)?.label ?? type;
 }
