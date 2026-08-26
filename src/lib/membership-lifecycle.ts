@@ -82,6 +82,8 @@ export type SubscriptionRow = {
    * putting a cleaner in a car.
    */
   payment_terms: "on_booking" | "later";
+  /** When cleanings start, local time. Every generated visit takes it. */
+  visit_time: string;
   pending_amount_cents: number | null;
   pending_amount_effective_on: ISODate | null;
   ends_on: ISODate | null;
@@ -334,7 +336,7 @@ export async function generateForSubscription(
                  ${timestamptzFromLocal(1, 2, 3)}, 0, $9, $10::payment_terms)`,
         [
           date,
-          DEFAULT_VISIT_TIME,
+          sub.visit_time,
           TIMEZONE,
           sub.customer_id,
           sub.property_id,
@@ -461,6 +463,7 @@ export async function generateUpcomingVisits(
               preferred_weekday_second,
               started_on::text as started_on, billing_day, interval_days,
               payment_terms::text as payment_terms,
+              visit_time::text as visit_time,
               pending_amount_cents, pending_amount_effective_on::text
                 as pending_amount_effective_on,
               ends_on::text as ends_on

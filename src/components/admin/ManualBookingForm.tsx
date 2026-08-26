@@ -85,6 +85,7 @@ export function ManualBookingForm() {
         plan,
         serviceType: String(data.get("serviceType") ?? ""),
         startsOn: String(data.get("startsOn") ?? ""),
+        startsAt: String(data.get("startsAt") ?? "09:00"),
         // Entered in dollars because that is how the conversation happened.
         // Rounded rather than truncated so 129.99 does not quietly become
         // 129.98.
@@ -333,6 +334,24 @@ export function ManualBookingForm() {
           </Label>
           <Label label={plan === "recurring" ? "First clean on" : "Date"}>
             <input name="startsOn" type="date" required className={field} />
+          </Label>
+          {/* Asked rather than assumed. Everything used to be nine in the
+              morning because nothing ever asked, so a time agreed on the
+              phone went into the notes and the cleaner's page then disagreed
+              with itself. */}
+          <Label label="Arriving at">
+            <input
+              name="startsAt"
+              type="time"
+              defaultValue="09:00"
+              required
+              className={field}
+            />
+            <span className="mt-1 block text-xs text-muted">
+              {plan === "recurring"
+                ? "Every cleaning on this schedule starts here."
+                : "What the cleaner is told, and what the customer is told."}
+            </span>
           </Label>
 
           {plan === "recurring" && (

@@ -272,6 +272,7 @@ test("the generator creates periods and visits, and is idempotent", async () => 
     pet_surcharge_cents: 1500,
     interval_days: null,
     payment_terms: "on_booking",
+    visit_time: "09:00",
     preferred_weekday: 4,
     preferred_weekday_second: null,
     started_on: "2026-01-15",
@@ -333,6 +334,7 @@ test("generated visits carry no pet surcharge and stay inside their period", asy
       billing_day: 10,
       interval_days: null,
     payment_terms: "on_booking",
+    visit_time: "09:00",
       pending_amount_cents: null,
       pending_amount_effective_on: null,
       ends_on: null,
@@ -479,6 +481,7 @@ test("an unpaid membership puts nothing on the schedule", async () => {
     pet_surcharge_cents: 0,
     interval_days: null,
     payment_terms: "on_booking",
+    visit_time: "09:00",
     preferred_weekday: 4,
     preferred_weekday_second: null,
     started_on: "2026-01-15",
@@ -548,6 +551,7 @@ test("paying promotes the membership and releases its visits", async () => {
     pet_surcharge_cents: 0,
     interval_days: null,
     payment_terms: "on_booking",
+    visit_time: "09:00",
     preferred_weekday: 4,
     preferred_weekday_second: null,
     started_on: "2026-01-15",
@@ -983,6 +987,7 @@ test("a once-a-month membership generates one cleaning per period, not two", asy
     pet_surcharge_cents: 0,
     interval_days: null,
     payment_terms: "on_booking",
+    visit_time: "09:00",
     preferred_weekday: 4,
     preferred_weekday_second: null,
     started_on: "2026-01-15",
@@ -1341,6 +1346,7 @@ test("a pay-later booking reaches the board, and an abandoned checkout does not"
     pet_surcharge_cents: 0,
     interval_days: 21,
     payment_terms: terms,
+        visit_time: "09:00",
     preferred_weekday: null,
     preferred_weekday_second: null,
     started_on: "2027-03-01",
@@ -1475,6 +1481,7 @@ test("a manual booking's first clean lands on the date that was agreed", async (
         billing_day: 11,
         interval_days: 21,
         payment_terms: terms,
+        visit_time: "09:00",
         pending_amount_cents: null,
         pending_amount_effective_on: null,
         ends_on: null,
@@ -1520,4 +1527,81 @@ test("a manual booking's first clean lands on the date that was agreed", async (
     [made.on_booking],
   );
   assert.deepEqual(await status(made.on_booking), ["scheduled"]);
+});
+
+test("a cleaning keeps the time it was booked for", async () => {
+  const { customerId, propertyId } = await seedCustomer("tenoclock@example.com");
+  const agreed = "2027-09-14";
+  const id = await insertSubscription(customerId, propertyId, agreed, 14);
+  await db.query(
+    `update subscriptions
+        set status = 'pending_payment', payment_terms = 'later', interval_days = 21,
+            visits_per_period = 1, preferred_weekday = null, visit_time = '10:00'
+      where id = $1`,
+    [id],
+  );
+
+  await generateForSubscription(
+    asClient(db),
+    {
+      id,
+      customer_id: customerId,
+      property_id: propertyId,
+      status: "pending_payment",
+      monthly_amount_cents: 19500,
+      visits_per_period: 1,
+      pet_surcharge_cents: 0,
+      preferred_weekday: null,
+      preferred_weekday_second: null,
+      started_on: agreed,
+      billing_day: 14,
+      interval_days: 21,
+      payment_terms: "later",
+      visit_time: "10:00",
+      pending_amount_cents: null,
+      pending_amount_effective_on: null,
+      ends_on: null,
+    },
+    agreed,
+    agreed,
+  );
+
+  const at = async () =>
+    (
+      await db.query<{ t: string }>(
+        `select distinct to_char(scheduled_for at time zone 'America/Chicago', 'HH24:MI') as t
+           from visits where subscription_id = $1`,
+        [id],
+      )
+    ).rows.map((r) => r.t);
+
+  // Every cleaning on the schedule, not only the first. A recurring customer
+  // keeps their slot.
+  assert.deepEqual(await at(), ["10:00"], "generated visits must use the agreed time");
+
+  // Moving a visit changes the day and nothing else. Rewriting the time to
+  // the default meant a ten o'clock customer quietly became a nine o'clock
+  // one the first time anything was rescheduled, and nobody would be told.
+  const [first] = (
+    await db.query<{ id: string }>(
+      `select id from visits where subscription_id = $1 order by scheduled_for limit 1`,
+      [id],
+    )
+  ).rows;
+  await db.query(
+    `update visits
+        set scheduled_for =
+              (($2::date + (scheduled_for at time zone $3)::time) at time zone $3)
+      where id = $1`,
+    [first.id, "2027-09-16", "America/Chicago"],
+  );
+
+  const moved = await db.query<{ on_date: string; t: string }>(
+    `select (scheduled_for at time zone 'America/Chicago')::date::text as on_date,
+            to_char(scheduled_for at time zone 'America/Chicago', 'HH24:MI') as t
+       from visits where id = $1`,
+    [first.id],
+  );
+  assert.equal(moved.rows[0].on_date, "2027-09-16", "the day should move");
+  assert.equal(moved.rows[0].t, "10:00", "the time should not");
 });

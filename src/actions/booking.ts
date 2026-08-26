@@ -256,6 +256,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
           // cadences are entered in admin.
           interval_days: null,
           payment_terms: "on_booking" as const,
+          visit_time: DEFAULT_VISIT_TIME,
           pet_surcharge_cents: 0,
           preferred_weekday: input.preferredWeekday ?? null,
           preferred_weekday_second: null,
