@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import {
+  FEEDBACK_DELAY,
+  requestFeedbackForVisit,
+} from "@/lib/emails/feedback-request";
 import { query } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin-auth";
 
@@ -36,6 +40,19 @@ export async function markVisitComplete(
     if (rows.length === 0) {
       return { ok: false, message: "That visit is not open, so nothing changed." };
     }
+
+    // Asked for a few hours from now, while the clean is still the thing
+    // that happened today. Handed to Resend to hold rather than waiting for
+    // a cron that runs twice a day, which is what made this arrive the
+    // following morning, after the feeling had gone.
+    //
+    // Never allowed to fail the completion. The visit is done either way, and
+    // the daily sweep picks up anything that did not go out.
+    await requestFeedbackForVisit(parsed.data, { scheduledAt: FEEDBACK_DELAY }).catch(
+      (err) => {
+        console.error(`[email] could not queue feedback for visit ${parsed.data}`, err);
+      },
+    );
 
     revalidatePath("/admin");
     return { ok: true, message: "Marked complete." };

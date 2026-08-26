@@ -1,5 +1,5 @@
 import { emailLayout, emailText, type Row } from "./layout";
-import { formatLong, type ISODate } from "../dates";
+import { formatLong, today, type ISODate } from "../dates";
 import type { CancellationTier } from "../cancellation";
 import { formatCents } from "../money";
 import { site } from "../site";
@@ -144,20 +144,42 @@ export function feedbackRequestEmail(params: {
   onDate: ISODate;
   feedbackUrl: string;
 }): Composed {
-  const stars = [1, 2, 3, 4, 5]
-    .map(
-      (n) =>
-        `<a href="${params.feedbackUrl}?rating=${n}" style="display:inline-block;padding:10px 16px;margin:0 4px 8px 0;border:1px solid #1F5FA6;border-radius:999px;font:600 15px -apple-system,'Helvetica Neue',Arial,sans-serif;color:#1F5FA6;text-decoration:none;">${n}</a>`,
-    )
-    .join("");
+  // The ends are labelled instead of the scale being explained. "5 being
+  // great" asks somebody to hold a rule in their head and then apply it,
+  // which is a step between them and the tap. A word under each end is read
+  // rather than decoded.
+  //
+  // Laid out as a table because a flex row is not a thing Outlook has heard
+  // of, and this is the only part of the message that has to survive intact.
+  const scale = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 4px">
+    <tr>${[1, 2, 3, 4, 5]
+      .map(
+        (n) =>
+          `<td align="center" style="padding-right:8px"><a href="${params.feedbackUrl}?rating=${n}" style="display:inline-block;width:44px;padding:11px 0;border:1px solid #1F5FA6;border-radius:999px;font:600 15px -apple-system,'Helvetica Neue',Arial,sans-serif;color:#1F5FA6;text-decoration:none;">${n}</a></td>`,
+      )
+      .join("")}</tr>
+    <tr>${[1, 2, 3, 4, 5]
+      .map((n) => {
+        const label = n === 1 ? "Not great" : n === 5 ? "Great" : "";
+        return `<td align="center" style="padding:6px 8px 0 0;font:400 12px -apple-system,'Helvetica Neue',Arial,sans-serif;color:#5A6B7C;white-space:nowrap;">${label}</td>`;
+      })
+      .join("")}</tr>
+  </table>`;
 
   return compose({
     subject: "How did we do?",
     heading: "How did we do?",
-    intro: `Hi ${params.firstName}. We cleaned your place on ${formatLong(params.onDate)}. Tap a number, 5 being great.`,
+    // "today" on the normal path, which is sent a few hours after the visit
+    // and is the whole point of sending it then. The daily sweep can catch a
+    // visit from several days ago, and telling somebody we cleaned today when
+    // we did not is a small lie that costs the rest of the message.
+    intro:
+      params.onDate === today()
+        ? `Hi ${params.firstName}. We cleaned your place today. How did it go?`
+        : `Hi ${params.firstName}. We cleaned your place on ${formatLong(params.onDate)}. How did it go?`,
     body: [
-      `<div style="margin:6px 0 4px">${stars}</div>`,
-      "It takes one tap, and there is room to say more on the next page if you want to.",
+      scale,
+      "One tap is enough, and there is room to say more on the next page if you want to.",
       "If anything was not right, tell us within 48 hours and we will come back and redo it at no charge.",
     ],
   });

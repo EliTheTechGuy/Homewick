@@ -40,21 +40,22 @@ export function FeedbackForm({
   if (done) {
     return (
       <div className="max-w-md">
-        <h1 className="text-3xl font-semibold text-navy md:text-4xl">
-          {done.recovery ? "Thank you, and sorry" : "Thank you"}
-        </h1>
+        <h1 className="text-3xl font-semibold text-navy md:text-4xl">Thanks</h1>
 
-        {done.recovery ? (
-          <p className="mt-4 leading-relaxed text-muted">
-            That is below the standard we hold ourselves to. We will be in touch to put
-            it right, and if it is something we can re clean, we will come back at no
-            charge.
-          </p>
-        ) : (
-          <p className="mt-4 leading-relaxed text-muted">
-            We are glad it went well. Your cleaner will hear about it.
-          </p>
-        )}
+        {/* One line, and for a low score it is a commitment rather than an
+            apology: somebody is calling today. Handing a person who has just
+            said the clean was poor nothing but a review button is an
+            invitation to go and write that in public, and the promise is what
+            buys the phone call time to land.
+
+            Everybody still gets the same link below. Withholding it by score
+            is what breaches Google's policy and the FTC's rule; saying sorry
+            to the people who deserve it does not. */}
+        <p className="mt-4 leading-relaxed text-muted">
+          {done.recovery
+            ? "Sorry that one missed. We will call you today to put it right, and if it is something we can re clean, we will come back at no charge."
+            : "That helps more than you know, and your cleaner will hear about it."}
+        </p>
 
         {/* The same link for everybody, whatever they scored. */}
         {site.reviewUrl && (
@@ -81,24 +82,34 @@ export function FeedbackForm({
     <form onSubmit={send} method="post" className="max-w-md">
       <h1 className="text-3xl font-semibold text-navy md:text-4xl">How did we do?</h1>
       <p className="mt-4 leading-relaxed text-muted">
-        Pick a score, 5 being great. Anything you add is read by us, not published.
+        Anything you add is read by us, not published.
       </p>
 
+      {/* The ends are labelled rather than the scale explained. "5 being
+          great" asks somebody to hold a rule in their head and then apply it;
+          a word under each end is just read. */}
       <div className="mt-6 flex flex-wrap gap-2">
         {SCORES.map((n) => (
-          <button
-            key={n}
-            type="button"
-            onClick={() => setRating(n)}
-            aria-pressed={rating === n}
-            className={`h-14 w-14 rounded-full border text-lg font-semibold transition-colors ${
-              rating === n
-                ? "border-accent bg-accent text-white"
-                : "border-hairline text-body hover:border-accent"
-            }`}
-          >
-            {n}
-          </button>
+          <span key={n} className="flex flex-col items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setRating(n)}
+              aria-pressed={rating === n}
+              aria-label={
+                n === 1 ? "1, not great" : n === 5 ? "5, great" : String(n)
+              }
+              className={`h-14 w-14 rounded-full border text-lg font-semibold transition-colors ${
+                rating === n
+                  ? "border-accent bg-accent text-white"
+                  : "border-hairline text-body hover:border-accent"
+              }`}
+            >
+              {n}
+            </button>
+            <span aria-hidden className="text-xs text-muted">
+              {n === 1 ? "Not great" : n === 5 ? "Great" : " "}
+            </span>
+          </span>
         ))}
       </div>
 
