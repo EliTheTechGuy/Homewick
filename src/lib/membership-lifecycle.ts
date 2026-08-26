@@ -73,6 +73,15 @@ export type SubscriptionRow = {
   billing_day: number;
   /** Null is the ordinary monthly cycle. A value means every N days. */
   interval_days: number | null;
+  /**
+   * Whether this was agreed before it was paid for.
+   *
+   * A pay-later booking generates real, scheduled visits so it reaches the
+   * board and can be staffed. Everything else stays pending_payment until
+   * Stripe says otherwise, which is what keeps an abandoned checkout from
+   * putting a cleaner in a car.
+   */
+  payment_terms: "on_booking" | "later";
   pending_amount_cents: number | null;
   pending_amount_effective_on: ISODate | null;
   ends_on: ISODate | null;
@@ -319,9 +328,10 @@ export async function generateForSubscription(
       await client.query(
         `insert into visits
            (customer_id, property_id, subscription_id, period_id, origin,
-            service_type, status, scheduled_for, pet_surcharge_cents, slot)
+            service_type, status, scheduled_for, pet_surcharge_cents, slot,
+            payment_terms)
          values ($4, $5, $6, $7, 'membership', 'standard', $8::visit_state,
-                 ${timestamptzFromLocal(1, 2, 3)}, 0, $9)`,
+                 ${timestamptzFromLocal(1, 2, 3)}, 0, $9, $10::payment_terms)`,
         [
           date,
           DEFAULT_VISIT_TIME,
@@ -330,11 +340,18 @@ export async function generateForSubscription(
           sub.property_id,
           sub.id,
           periodId,
-          sub.status === "pending_payment" ? "pending_payment" : "scheduled",
+          sub.status === "pending_payment" && sub.payment_terms === "on_booking"
+            ? "pending_payment"
+            : "scheduled",
           // Which cleaning of the period this is. Stored rather than derived,
           // because a member moving the second one earlier must not turn it
           // into the first.
           wanted.indexOf(date),
+          // Carried down from the subscription. Without this a pay-later
+          // booking would generate visits that look like ordinary paid ones,
+          // and the board would have no way to tell you the money is still
+          // outstanding.
+          sub.payment_terms,
         ],
       );
       visitsCreated++;
@@ -443,6 +460,7 @@ export async function generateUpcomingVisits(
               visits_per_period, pet_surcharge_cents, preferred_weekday,
               preferred_weekday_second,
               started_on::text as started_on, billing_day, interval_days,
+              payment_terms::text as payment_terms,
               pending_amount_cents, pending_amount_effective_on::text
                 as pending_amount_effective_on,
               ends_on::text as ends_on

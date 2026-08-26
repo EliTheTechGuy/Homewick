@@ -9,6 +9,7 @@ import { today } from "@/lib/dates";
 import { UNIT_SIZES, type ServiceType, type UnitSize } from "@/lib/pricing";
 import { sendOnce } from "@/lib/emails/send-once";
 import { paymentLinkEmail } from "@/lib/emails/templates";
+import { generateForSubscription } from "@/lib/membership-lifecycle";
 import { createCheckoutSession } from "./checkout";
 
 /**
@@ -69,6 +70,15 @@ const schema = z.object({
   intervalDays: z.number().int().min(7).max(365).optional(),
   visitsPerPeriod: z.number().int().min(1).max(10).optional(),
   notes: z.string().trim().max(2000).optional(),
+
+  /**
+   * When the payment link goes out.
+   *
+   * "later" is for the customer who will not pay up front, usually because
+   * somebody took their money and did not turn up. The job is agreed and
+   * staffed now, and the link is sent nearer the day from their record.
+   */
+  paymentTerms: z.enum(["on_booking", "later"]).default("on_booking"),
 });
 
 export type ManualBookingInput = z.infer<typeof schema>;
@@ -158,10 +168,10 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
           `insert into visits
              (customer_id, property_id, origin, service_type, status, scheduled_for,
               base_amount_cents, pet_surcharge_cents, addons_amount_cents,
-              customer_instructions)
-           values ($1, $2, 'one_off', $3, 'pending_payment',
+              customer_instructions, payment_terms)
+           values ($1, $2, 'one_off', $3, $7::visit_state,
                    ($4::date + time '09:00') at time zone 'America/Chicago',
-                   $5, 0, 0, $6)
+                   $5, 0, 0, $6, $8::payment_terms)
            returning id`,
           [
             customerId,
@@ -170,6 +180,12 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
             input.startsOn,
             input.amountCents,
             input.notes || null,
+            // Scheduled, not pending_payment. A job somebody is paying for on
+            // the day still needs a cleaner sent to it, and the admin board
+            // deliberately hides anything pending_payment so that an abandoned
+            // checkout never reaches one.
+            input.paymentTerms === "later" ? "scheduled" : "pending_payment",
+            input.paymentTerms,
           ],
         );
         return { kind: "one_time" as const, id: rows[0].id, customerId };
@@ -185,8 +201,9 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
         `insert into subscriptions
            (customer_id, property_id, unit_size, status, monthly_amount_cents,
             visits_per_period, pet_surcharge_cents, started_on, billing_day,
-            interval_days, created_by)
-         values ($1, $2, $3, 'pending_payment', $4, $5, 0, $6, $7, $8, $9)
+            interval_days, created_by, payment_terms)
+         values ($1, $2, $3, 'pending_payment', $4, $5, 0, $6, $7, $8, $9,
+                 $10::payment_terms)
          returning id`,
         [
           customerId,
@@ -198,10 +215,64 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
           billingDay,
           input.intervalDays,
           admin.actor,
+          input.paymentTerms,
         ],
       );
+      // A pay-later booking has to be a real job now, not when the money
+      // arrives. Nothing else generates visits for a manual subscription: the
+      // daily job only looks at active ones, so without this there would be
+      // nothing on the board to put a cleaner against, which is the entire
+      // reason for agreeing the job before collecting for it.
+      //
+      // notBefore is the start date he actually chose. The default holds
+      // visits back two days, which is right for the daily generator and wrong
+      // for somebody who agreed a date on the phone.
+      if (input.paymentTerms === "later") {
+        await generateForSubscription(
+          client,
+          {
+            id: rows[0].id,
+            customer_id: customerId,
+            property_id: propertyId,
+            status: "pending_payment",
+            monthly_amount_cents: input.amountCents,
+            visits_per_period: input.visitsPerPeriod ?? 1,
+            pet_surcharge_cents: 0,
+            preferred_weekday: null,
+            preferred_weekday_second: null,
+            started_on: input.startsOn,
+            billing_day: billingDay,
+            interval_days: input.intervalDays ?? null,
+            payment_terms: "later",
+            pending_amount_cents: null,
+            pending_amount_effective_on: null,
+            ends_on: null,
+          },
+          input.startsOn,
+          input.startsOn,
+        );
+      }
+
       return { kind: "membership" as const, id: rows[0].id, customerId };
     });
+
+    const cadence =
+      input.plan === "recurring"
+        ? `every ${input.intervalDays} days at ${money(input.amountCents)}`
+        : `one visit at ${money(input.amountCents)}`;
+
+    // Nothing is sent yet when the link is going out later. The job is on the
+    // board and can be staffed; the money is collected from their record when
+    // he decides to ask for it.
+    if (input.paymentTerms === "later") {
+      revalidatePath("/admin");
+      revalidatePath("/admin/members");
+      return {
+        ok: true,
+        emailed: false,
+        message: `${input.firstName} is in, ${cadence}. Nothing has been sent yet. Assign a cleaner now, and send the payment link from their record when you are ready.`,
+      };
+    }
 
     // Outside the transaction: a Stripe outage must not roll back a customer
     // record that was entered correctly. Worst case the link is missing and
@@ -247,11 +318,6 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
       console.error(`[admin] payment link email failed for ${ref.id}`, err);
       return { sent: false as const };
     });
-
-    const cadence =
-      input.plan === "recurring"
-        ? `every ${input.intervalDays} days at ${money(input.amountCents)}`
-        : `one visit at ${money(input.amountCents)}`;
 
     return {
       ok: true,

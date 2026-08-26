@@ -205,6 +205,23 @@ export default async function MetricsPage() {
         />
       </div>
 
+      <h2 className="mt-10 text-lg font-semibold text-navy">Owed to you</h2>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <Stat
+          label="Cleaned, not paid for"
+          value={money(m.unpaid.totalCents)}
+          note={`${m.unpaid.jobs} ${m.unpaid.jobs === 1 ? "job" : "jobs"} agreed before payment`}
+          tone={m.unpaid.totalCents > 0 ? "warn" : "plain"}
+        />
+        <div className="flex items-center rounded-2xl border border-hairline p-5">
+          <p className="text-sm leading-relaxed text-muted">
+            Work that was agreed on trust and has been done. The cleaner has already
+            been paid for it, so this is money out of your pocket until it is
+            settled.
+          </p>
+        </div>
+      </div>
+
       <h2 className="mt-10 text-lg font-semibold text-navy">Owed to cleaners</h2>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <Stat

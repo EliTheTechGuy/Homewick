@@ -271,6 +271,7 @@ test("the generator creates periods and visits, and is idempotent", async () => 
     visits_per_period: 2,
     pet_surcharge_cents: 1500,
     interval_days: null,
+    payment_terms: "on_booking",
     preferred_weekday: 4,
     preferred_weekday_second: null,
     started_on: "2026-01-15",
@@ -331,6 +332,7 @@ test("generated visits carry no pet surcharge and stay inside their period", asy
       started_on: "2026-03-10",
       billing_day: 10,
       interval_days: null,
+    payment_terms: "on_booking",
       pending_amount_cents: null,
       pending_amount_effective_on: null,
       ends_on: null,
@@ -476,6 +478,7 @@ test("an unpaid membership puts nothing on the schedule", async () => {
     visits_per_period: 2,
     pet_surcharge_cents: 0,
     interval_days: null,
+    payment_terms: "on_booking",
     preferred_weekday: 4,
     preferred_weekday_second: null,
     started_on: "2026-01-15",
@@ -544,6 +547,7 @@ test("paying promotes the membership and releases its visits", async () => {
     visits_per_period: 2,
     pet_surcharge_cents: 0,
     interval_days: null,
+    payment_terms: "on_booking",
     preferred_weekday: 4,
     preferred_weekday_second: null,
     started_on: "2026-01-15",
@@ -978,6 +982,7 @@ test("a once-a-month membership generates one cleaning per period, not two", asy
     visits_per_period: 1,
     pet_surcharge_cents: 0,
     interval_days: null,
+    payment_terms: "on_booking",
     preferred_weekday: 4,
     preferred_weekday_second: null,
     started_on: "2026-01-15",
@@ -1312,4 +1317,125 @@ test("the free add-on rule means the same thing in Postgres as it does in code",
   // while proving nothing.
   assert.ok(made.some((m) => m.expected));
   assert.ok(made.some((m) => !m.expected));
+});
+
+test("a pay-later booking reaches the board, and an abandoned checkout does not", async () => {
+  const { customerId, propertyId } = await seedCustomer("paylater@example.com");
+  const later = await insertSubscription(customerId, propertyId, "2027-03-01", 1);
+  await db.query(
+    `update subscriptions set payment_terms = 'later', interval_days = 21 where id = $1`,
+    [later],
+  );
+  const abandoned = await insertSubscription(customerId, propertyId, "2027-03-01", 1);
+  await db.query(`update subscriptions set interval_days = 21 where id = $1`, [
+    abandoned,
+  ]);
+
+  const row = (id: string, terms: "on_booking" | "later"): SubscriptionRow => ({
+    id,
+    customer_id: customerId,
+    property_id: propertyId,
+    status: "pending_payment",
+    monthly_amount_cents: 19500,
+    visits_per_period: 1,
+    pet_surcharge_cents: 0,
+    interval_days: 21,
+    payment_terms: terms,
+    preferred_weekday: null,
+    preferred_weekday_second: null,
+    started_on: "2027-03-01",
+    billing_day: 1,
+    pending_amount_cents: null,
+    pending_amount_effective_on: null,
+    ends_on: null,
+  });
+
+  await generateForSubscription(asClient(db), row(later, "later"), "2027-03-01", "2027-03-01");
+  await generateForSubscription(asClient(db), row(abandoned, "on_booking"), "2027-03-01", "2027-03-01");
+
+  const states = await db.query<{
+    subscription_id: string;
+    status: string;
+    payment_terms: string;
+  }>(
+    `select subscription_id, status::text as status, payment_terms::text as payment_terms
+       from visits where subscription_id = any($1::uuid[])`,
+    [[later, abandoned]],
+  );
+
+  const forLater = states.rows.filter((r) => r.subscription_id === later);
+  const forAbandoned = states.rows.filter((r) => r.subscription_id === abandoned);
+  assert.ok(forLater.length > 0 && forAbandoned.length > 0, "both should generate visits");
+
+  // The board shows scheduled and assigned, and nothing else. This is the
+  // whole mechanism: a job agreed on the phone can be staffed, and a checkout
+  // somebody wandered away from cannot.
+  assert.ok(
+    forLater.every((r) => r.status === "scheduled"),
+    "a pay-later booking must be a real job so a cleaner can be sent to it",
+  );
+  assert.ok(
+    forAbandoned.every((r) => r.status === "pending_payment"),
+    "an unpaid ordinary booking must stay off the board",
+  );
+
+  // And the terms travel down to the visit, or nothing could mark it unpaid.
+  assert.ok(forLater.every((r) => r.payment_terms === "later"));
+  assert.ok(forAbandoned.every((r) => r.payment_terms === "on_booking"));
+});
+
+test("an expiring checkout cancels an abandoned booking and never a staffed one", async () => {
+  const { customerId, propertyId } = await seedCustomer("expiry@example.com");
+  const made: Record<string, string> = {};
+  for (const terms of ["on_booking", "later"] as const) {
+    const id = await insertSubscription(customerId, propertyId, "2027-04-01", 1);
+    // The table defaults to active; an unpaid booking is not.
+    await db.query(
+      `update subscriptions set payment_terms = $2, status = 'pending_payment'
+        where id = $1`,
+      [id, terms],
+    );
+    // A membership visit must belong to a period; the schema insists on it.
+    const period = await db.query<{ id: string }>(
+      `insert into subscription_periods
+         (subscription_id, period_start, period_end, visits_allotted, amount_cents)
+       values ($1, '2027-04-01', '2027-05-01', 1, 19500) returning id`,
+      [id],
+    );
+    await db.query(
+      `insert into visits (customer_id, property_id, subscription_id, period_id, origin,
+                           service_type, status, scheduled_for, payment_terms)
+       values ($1, $2, $3, $4, 'membership', 'standard', 'pending_payment',
+               '2027-04-10 09:00-05', $5::payment_terms)`,
+      [customerId, propertyId, id, period.rows[0].id, terms],
+    );
+    made[terms] = id;
+  }
+
+  // The statements the webhook runs when Stripe reports a session expired.
+  for (const id of Object.values(made)) {
+    await db.query(
+      `update visits set status = 'canceled'
+        where subscription_id = $1 and status = 'pending_payment'
+          and payment_terms = 'on_booking'`,
+      [id],
+    );
+    await db.query(
+      `update subscriptions set status = 'canceled', ends_on = current_date
+        where id = $1 and status = 'pending_payment' and payment_terms = 'on_booking'`,
+      [id],
+    );
+  }
+
+  const after = await db.query<{ id: string; status: string }>(
+    `select id, status::text as status from subscriptions where id = any($1::uuid[])`,
+    [Object.values(made)],
+  );
+  const byId = new Map(after.rows.map((r) => [r.id, r.status]));
+  assert.equal(byId.get(made.on_booking), "canceled", "an abandoned checkout is cleared");
+  assert.equal(
+    byId.get(made.later),
+    "pending_payment",
+    "a job already on the board must survive its link expiring",
+  );
 });

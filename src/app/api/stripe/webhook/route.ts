@@ -156,16 +156,26 @@ async function handle(event: Stripe.Event): Promise<void> {
       // and clutter every report.
       const session = event.data.object;
 
+      // Never a pay-later booking. Those were agreed deliberately, are on the
+      // board, and may already have cleaners assigned to them. A link that
+      // went out this morning and was not clicked expires tomorrow, and
+      // wiping a staffed job because of that would be the worst thing this
+      // handler could do. They are chased by hand, which is the point of them.
       if (session.metadata?.kind === "membership" && session.metadata.subscription_id) {
         await query(
-          `update visits set status = 'canceled'
-            where subscription_id = $1 and status = 'pending_payment'`,
+          `update visits v
+              set status = 'canceled'
+            where v.subscription_id = $1
+              and v.status = 'pending_payment'
+              and v.payment_terms = 'on_booking'`,
           [session.metadata.subscription_id],
         );
         await query(
           `update subscriptions
               set status = 'canceled', ends_on = current_date, updated_at = now()
-            where id = $1 and status = 'pending_payment'`,
+            where id = $1
+              and status = 'pending_payment'
+              and payment_terms = 'on_booking'`,
           [session.metadata.subscription_id],
         );
       }
@@ -173,7 +183,9 @@ async function handle(event: Stripe.Event): Promise<void> {
       if (session.metadata?.kind === "one_time" && session.metadata.visit_id) {
         await query(
           `update visits set status = 'canceled'
-            where id = $1 and status = 'pending_payment'`,
+            where id = $1
+              and status = 'pending_payment'
+              and payment_terms = 'on_booking'`,
           [session.metadata.visit_id],
         );
       }

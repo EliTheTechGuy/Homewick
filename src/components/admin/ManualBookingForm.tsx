@@ -32,6 +32,7 @@ function Label({ children, label }: { children: React.ReactNode; label: string }
 
 export function ManualBookingForm() {
   const [plan, setPlan] = useState<"single" | "recurring">("recurring");
+  const [paymentTerms, setPaymentTerms] = useState<"on_booking" | "later">("on_booking");
   const [intervalDays, setIntervalDays] = useState(21);
   const [entryMethod, setEntryMethod] = useState("none");
   const [propertyKind, setPropertyKind] = useState<"apartment" | "house">("apartment");
@@ -91,6 +92,7 @@ export function ManualBookingForm() {
         intervalDays: plan === "recurring" ? intervalDays : undefined,
         visitsPerPeriod: plan === "recurring" ? Number(data.get("visitsPerPeriod")) : undefined,
         notes: String(data.get("notes") ?? ""),
+        paymentTerms,
       });
       setResult({
         ok: res.ok,
@@ -395,6 +397,61 @@ export function ManualBookingForm() {
         <Label label="Notes for the cleaner">
           <textarea name="notes" rows={3} className={`${field} mt-4`} />
         </Label>
+
+        {/* Nothing about this is scheduling. It decides whether the job goes
+            on the board now or waits behind a payment, which is the whole
+            difference between somebody you can staff and somebody you cannot. */}
+        <fieldset className="mt-6">
+          <legend className="text-sm font-medium text-body">The payment link</legend>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {(
+              [
+                {
+                  id: "on_booking" as const,
+                  title: "Send it now",
+                  body: "They pay before anything is scheduled. This is the normal way.",
+                },
+                {
+                  id: "later" as const,
+                  title: "I will send it later",
+                  body: "The job goes on the board straight away so you can assign cleaners. Send the link from their record when you are ready.",
+                },
+              ]
+            ).map((o) => (
+              <label
+                key={o.id}
+                className={`cursor-pointer rounded-xl border p-4 transition-colors ${
+                  paymentTerms === o.id
+                    ? "border-accent bg-accent/5"
+                    : "border-hairline hover:border-accent/40"
+                }`}
+              >
+                <span className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="paymentTermsChoice"
+                    checked={paymentTerms === o.id}
+                    onChange={() => setPaymentTerms(o.id)}
+                    className="mt-1 h-4 w-4 accent-[#1F5FA6]"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-body">{o.title}</span>
+                    <span className="mt-1 block text-xs leading-relaxed text-muted">
+                      {o.body}
+                    </span>
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {paymentTerms === "later" && (
+            <p className="mt-3 text-sm text-muted">
+              Nothing is charged and nothing is sent. You are agreeing to do the work
+              before being paid for it, so it will show as unpaid on the schedule until
+              they settle it.
+            </p>
+          )}
+        </fieldset>
       </section>
 
       <div className="flex items-center gap-4">
