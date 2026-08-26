@@ -221,37 +221,47 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
       // A pay-later booking has to be a real job now, not when the money
       // arrives. Nothing else generates visits for a manual subscription: the
       // daily job only looks at active ones, so without this there would be
-      // nothing on the board to put a cleaner against, which is the entire
-      // reason for agreeing the job before collecting for it.
+      // nothing on the board to put a cleaner against, whether the money is
+      // coming today or on the day.
       //
-      // notBefore is the start date he actually chose. The default holds
-      // visits back two days, which is right for the daily generator and wrong
-      // for somebody who agreed a date on the phone.
-      if (input.paymentTerms === "later") {
-        await generateForSubscription(
-          client,
-          {
-            id: rows[0].id,
-            customer_id: customerId,
-            property_id: propertyId,
-            status: "pending_payment",
-            monthly_amount_cents: input.amountCents,
-            visits_per_period: input.visitsPerPeriod ?? 1,
-            pet_surcharge_cents: 0,
-            preferred_weekday: null,
-            preferred_weekday_second: null,
-            started_on: input.startsOn,
-            billing_day: billingDay,
-            interval_days: input.intervalDays ?? null,
-            payment_terms: "later",
-            pending_amount_cents: null,
-            pending_amount_effective_on: null,
-            ends_on: null,
-          },
-          input.startsOn,
-          input.startsOn,
-        );
-      }
+      // Done for every manual booking, not only the pay-later ones. Waiting
+      // for the daily job cost the customer their agreed date twice over: it
+      // does not run until the next morning, and it refuses to schedule
+      // anything inside two days, so a first clean agreed for the 27th was
+      // being created for the 29th. Somebody would have been told a date
+      // nobody was ever going to turn up on.
+      //
+      // notBefore is the date he actually agreed. The two day floor is right
+      // for a generator running unattended and wrong for a date settled on
+      // the phone.
+      //
+      // A pay-now booking still generates its visits as pending_payment, so
+      // they stay off the board until Stripe says otherwise and no cleaner is
+      // sent to a job nobody has paid for. generateForSubscription reads that
+      // from the payment terms below.
+      await generateForSubscription(
+        client,
+        {
+          id: rows[0].id,
+          customer_id: customerId,
+          property_id: propertyId,
+          status: "pending_payment",
+          monthly_amount_cents: input.amountCents,
+          visits_per_period: input.visitsPerPeriod ?? 1,
+          pet_surcharge_cents: 0,
+          preferred_weekday: null,
+          preferred_weekday_second: null,
+          started_on: input.startsOn,
+          billing_day: billingDay,
+          interval_days: input.intervalDays ?? null,
+          payment_terms: input.paymentTerms,
+          pending_amount_cents: null,
+          pending_amount_effective_on: null,
+          ends_on: null,
+        },
+        input.startsOn,
+        input.startsOn,
+      );
 
       return { kind: "membership" as const, id: rows[0].id, customerId };
     });
