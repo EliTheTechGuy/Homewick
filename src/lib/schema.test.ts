@@ -1439,3 +1439,85 @@ test("an expiring checkout cancels an abandoned booking and never a staffed one"
     "a job already on the board must survive its link expiring",
   );
 });
+
+test("a manual booking's first clean lands on the date that was agreed", async () => {
+  const { customerId, propertyId } = await seedCustomer("agreeddate@example.com");
+  const agreed = "2027-05-11";
+
+  const made: Record<string, string> = {};
+  for (const terms of ["on_booking", "later"] as const) {
+    const id = await insertSubscription(customerId, propertyId, agreed, 11);
+    await db.query(
+      `update subscriptions
+          set status = 'pending_payment', payment_terms = $2, interval_days = 21,
+              visits_per_period = 1, preferred_weekday = null
+        where id = $1`,
+      [id, terms],
+    );
+
+    // Exactly what the booking action does: generate now, from the date that
+    // was agreed. The daily job would not run until tomorrow and would then
+    // refuse anything inside two days, which moved the visit off the date the
+    // customer was given.
+    await generateForSubscription(
+      asClient(db),
+      {
+        id,
+        customer_id: customerId,
+        property_id: propertyId,
+        status: "pending_payment",
+        monthly_amount_cents: 19500,
+        visits_per_period: 1,
+        pet_surcharge_cents: 0,
+        preferred_weekday: null,
+        preferred_weekday_second: null,
+        started_on: agreed,
+        billing_day: 11,
+        interval_days: 21,
+        payment_terms: terms,
+        pending_amount_cents: null,
+        pending_amount_effective_on: null,
+        ends_on: null,
+      },
+      agreed,
+      agreed,
+    );
+    made[terms] = id;
+  }
+
+  for (const [terms, id] of Object.entries(made)) {
+    const { rows } = await db.query<{ on_date: string }>(
+      `select (scheduled_for at time zone 'America/Chicago')::date::text as on_date
+         from visits where subscription_id = $1 order by scheduled_for`,
+      [id],
+    );
+    assert.ok(rows.length > 0, `${terms} generated no visits at all`);
+    assert.equal(
+      rows[0].on_date,
+      agreed,
+      `${terms}: the first clean must fall on the date the customer was given`,
+    );
+  }
+
+  const status = async (id: string) =>
+    (
+      await db.query<{ status: string }>(
+        `select distinct status::text as status from visits where subscription_id = $1`,
+        [id],
+      )
+    ).rows.map((r) => r.status);
+
+  // Paid up front means the job stays off the board until Stripe says so.
+  // Agreed and paying later means it is on the board and can be staffed.
+  assert.deepEqual(await status(made.on_booking), ["pending_payment"]);
+  assert.deepEqual(await status(made.later), ["scheduled"]);
+
+  // When the payment lands, the webhook's own statement puts the pay-now one
+  // on the board without waiting for tomorrow's cron.
+  await db.query(
+    `update visits set status = 'scheduled'
+      where subscription_id = $1 and status = 'pending_payment'`,
+    [made.on_booking],
+  );
+  assert.deepEqual(await status(made.on_booking), ["scheduled"]);
+});
