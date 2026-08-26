@@ -7,9 +7,7 @@ import { formatCents } from "@/lib/money";
 import { propertyLabel, type UnitSize } from "@/lib/pricing";
 import { RevealAccess } from "@/components/RevealAccess";
 import { MarkComplete } from "@/components/MarkComplete";
-import { MarkSkipped } from "@/components/MarkSkipped";
-import { CancelVisitAdmin } from "@/components/admin/CancelVisitAdmin";
-import { AssignCrew, type CleanerOption } from "@/components/admin/AssignCrew";
+import type { CleanerOption } from "@/components/admin/AssignCrew";
 import { MonthCalendar, type DayCount } from "@/components/admin/MonthCalendar";
 import { UpcomingRail, type UpcomingRow } from "@/components/admin/UpcomingRail";
 import { addDays, addMonths, isISODate } from "@/lib/dates";
@@ -272,31 +270,34 @@ export default async function AdminTodayPage({
                 </div>
               )}
 
+              {/* Two things, both of them things you do while the job is
+                  actually happening. Everything else about a booking, the
+                  crew, the payment, cancelling it, lives on the bookings
+                  list, where you are not trying to read a day at a glance. */}
               <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-hairline pt-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <RevealAccess visitId={visit.id} propertyId={visit.property_id} />
                   {visit.status !== "completed" && visit.status !== "skipped" && (
-                    <>
-                      <MarkComplete visitId={visit.id} />
-                      <MarkSkipped visitId={visit.id} />
-                      {/* One-off only. A membership cleaning is one the
-                          period already paid for, so there is nothing to
-                          refund and Skipped is the right word for it. */}
-                      {visit.origin === "one_off" && (
-                        <CancelVisitAdmin visitId={visit.id} />
-                      )}
-                    </>
+                    <MarkComplete visitId={visit.id} />
                   )}
                 </div>
-                <AssignCrew
-                  visitId={visit.id}
-                  cleaners={cleaners}
-                  crew={(visit.crew ?? []).map((c) => ({
-                    cleanerId: c.cleaner_id,
-                    isLead: c.is_lead,
-                  }))}
-                  isHouse={visit.property_kind === "house"}
-                />
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  {visit.crew && visit.crew.length > 0 ? (
+                    <span className="text-muted">
+                      {visit.crew.length === 1
+                        ? visit.cleaner_name
+                        : `${visit.crew.length} cleaners`}
+                    </span>
+                  ) : (
+                    <span className="font-medium text-amber-800">Needs a cleaner</span>
+                  )}
+                  <Link
+                    href={`/admin/bookings?open=${visit.id}`}
+                    className="font-medium text-accent hover:underline"
+                  >
+                    Manage
+                  </Link>
+                </div>
               </div>
             </li>
           ))}
