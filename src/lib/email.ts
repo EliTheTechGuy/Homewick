@@ -30,6 +30,17 @@ export async function sendEmail(params: {
   text: string;
   /** Optional; clients that cannot render it fall back to `text`. */
   html?: string;
+  /**
+   * Hand it over now, deliver it later. Natural language or ISO 8601.
+   *
+   * This is how a message gets sent a few hours after the thing it is about,
+   * on a plan whose cron runs twice a day. Resend holds it; we do not need a
+   * scheduler, a queue, or a job that wakes up to check.
+   *
+   * "delivered" below therefore means Resend accepted it, which for a
+   * scheduled message is the only answer available at the time of the call.
+   */
+  scheduledAt?: string;
 }): Promise<{ delivered: boolean }> {
   if (!isEmailConfigured()) {
     // The subject and a masked recipient, never the body. A sign-in email's
@@ -58,6 +69,7 @@ export async function sendEmail(params: {
         to: [params.to],
         subject: params.subject,
         text: params.text,
+        ...(params.scheduledAt ? { scheduled_at: params.scheduledAt } : {}),
         ...(params.html ? { html: params.html } : {}),
         // No reply-to header on purpose. This address does not take mail, and
         // the message says so. Pointing replies somewhere they are not read

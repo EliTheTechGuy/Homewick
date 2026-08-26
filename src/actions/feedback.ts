@@ -3,6 +3,8 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { queryOne, transaction } from "@/lib/db";
+import { TIMEZONE, formatLong } from "@/lib/dates";
+import { alertOwner } from "@/lib/alert";
 
 /**
  * Submitting feedback from the emailed link.
@@ -35,7 +37,7 @@ export async function submitFeedback(raw: unknown): Promise<FeedbackResult> {
   const { token, rating, comment } = parsed.data;
 
   try {
-    return await transaction(async (client) => {
+    const result = await transaction(async (client) => {
       const { rows } = await client.query<{ id: string; responded_at: string | null }>(
         `select id, responded_at::text as responded_at
            from visit_feedback
@@ -70,8 +72,60 @@ export async function submitFeedback(raw: unknown): Promise<FeedbackResult> {
         [row.id, rating, comment ?? "", needsRecovery],
       );
 
-      return { ok: true as const, rating, recovery: needsRecovery };
+      // Everything needed to pick up the phone, fetched inside the same
+      // transaction so the alert below cannot describe a state that did not
+      // commit.
+      const who = needsRecovery
+        ? (
+            await client.query<{
+              first_name: string;
+              last_name: string;
+              phone: string;
+              email: string;
+              on_date: string;
+              line1: string;
+              city: string;
+            }>(
+              `select c.first_name, c.last_name, c.phone, c.email::text as email,
+                      (v.scheduled_for at time zone $2)::date::text as on_date,
+                      p.line1, p.city
+                 from visit_feedback f
+                 join visits v on v.id = f.visit_id
+                 join customers c on c.id = v.customer_id
+                 join properties p on p.id = v.property_id
+                where f.id = $1`,
+              [row.id, TIMEZONE],
+            )
+          ).rows[0]
+        : null;
+
+      return { ok: true as const, rating, recovery: needsRecovery, who, comment };
     });
+    // A bad score has to reach a person the same day, not sit in a tab
+    // waiting to be noticed. The recovery flag was already being set and
+    // nothing ever told anybody about it, which made the promise on the
+    // confirmation page something the system could not keep.
+    //
+    // Outside the transaction and never allowed to fail the submission. The
+    // rating is saved; a missing alert is a worse day, not lost feedback.
+    if (result.ok && result.recovery && result.who) {
+      const w = result.who;
+      await alertOwner(
+        `${w.first_name} rated a clean ${result.rating} out of 5`,
+        `${w.first_name} ${w.last_name} scored the clean on ${formatLong(w.on_date)} ` +
+          `at ${w.line1}, ${w.city} as ${result.rating} out of 5.\n\n` +
+          `Call them today: ${w.phone}\n` +
+          `Email: ${w.email}\n\n` +
+          (result.comment
+            ? `What they said:\n${result.comment}\n\n`
+            : "They did not leave a comment.\n\n") +
+          `The service agreement says we come back and re clean at no charge ` +
+          `within 48 hours. Reaching them the same day is what makes that ` +
+          `worth having.`,
+      );
+    }
+
+    return result;
   } catch (err) {
     console.error("[feedback] submission failed", err);
     return { ok: false, message: "That did not save. Please try again." };
