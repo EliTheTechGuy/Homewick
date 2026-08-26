@@ -8,103 +8,172 @@ import { SERVICE_INCLUDES, addOnByCode, type ServiceType } from "./pricing";
  * clean at every address, and a list somebody can edit per booking is a list
  * that drifts until two cleaners are doing two different jobs under one name.
  *
- * Deliberately built from the same wording the site already uses on the
- * apartments page. What a customer is promised and what a cleaner is told to
- * do have to be the same sentences, or the guarantee is being made against a
- * different job to the one being done.
+ * A cleaner is never shown "everything in Standard, plus". They get one flat
+ * list of everything on this job, which is why the extra work below is merged
+ * into the room it belongs to rather than appended as its own tier. Nobody
+ * standing in a kitchen should have to cross-reference two sections to find
+ * out whether the range hood is theirs.
  *
- * Anything specific to one place still goes in the booking notes, which the
- * job page already shows under "The customer asked".
+ * Anything specific to one address still goes in the booking notes, which the
+ * job page shows separately under "The customer asked".
  */
 
 export type ChecklistSection = { title: string; items: string[] };
 
-const BASE: ChecklistSection[] = [
+const KITCHEN = "Kitchen";
+const BATHROOMS = "Bathrooms";
+const LIVING = "Bedrooms and living areas";
+const THROUGHOUT = "Throughout";
+
+const STANDARD: ChecklistSection[] = [
   {
-    title: "Kitchen",
+    title: KITCHEN,
     items: [
       "Counters, backsplash, and exterior of appliances",
       "Sink scrubbed and drain cleared of debris",
-      "Cooktop and exterior of oven and microwave",
+      "Cooktop and exterior of oven",
+      "Microwave inside and out",
       "Cabinet fronts wiped",
       "Trash emptied and liner replaced",
     ],
   },
   {
-    title: "Bathrooms",
+    title: BATHROOMS,
     items: [
       "Toilet cleaned inside and out",
       "Shower, tub, and tile scrubbed",
       "Sink, counter, and mirror",
+      "Chrome fixtures wiped and shined",
       "Floors washed",
     ],
   },
   {
-    title: "Bedrooms and living areas",
+    title: LIVING,
     items: [
-      "Bed linens changed",
+      "Beds made; linens changed when fresh sets are left out",
       "Surfaces dusted, including sills and reachable ledges",
+      "Ceiling fans dusted",
+      "Light fixtures dusted",
       "Floors vacuumed and hard floors mopped",
       "Mirrors and glass",
     ],
   },
   {
-    title: "Throughout",
+    title: THROUGHOUT,
     items: [
       "Light switches, door handles, and other touch points",
       "Baseboards where reachable",
+      "Cobwebs and high corners",
       "Trash collected and taken to the bin",
+      "Final walk-through",
     ],
   },
 ];
 
-/** What the thorough services add on top of the base. */
-const EXTRA: Record<ServiceType, ChecklistSection[]> = {
-  standard: [],
-  deep: [
-    {
-      title: "Deep clean, on top of the above",
-      items: [
-        "Baseboards and door frames in detail",
-        "Buildup on tile grout and fixtures",
-        "Interior window sills and tracks",
-        "Behind and beneath movable furniture",
-      ],
-    },
-  ],
-  move_out: [
-    {
-      title: "Move in and out, on top of the above",
-      items: [
-        "Inside all cabinets and drawers",
-        "Closets and shelving",
-        "Inside the washer and dryer where present",
-        "Left to the condition a leasing office inspects against",
-      ],
-    },
-  ],
-};
+/**
+ * What a deep clean adds, filed under the room it happens in.
+ *
+ * "Detail work" has no equivalent in the standard list, so it becomes its own
+ * section rather than being spread across four.
+ */
+const DEEP_ADDS: ChecklistSection[] = [
+  {
+    title: KITCHEN,
+    items: [
+      "Behind and beneath the refrigerator and stove",
+      "Range hood and filter degreased",
+      "Backsplash and cabinet fronts degreased",
+    ],
+  },
+  {
+    title: BATHROOMS,
+    items: ["Shower door tracks detailed", "Hard water and mineral buildup treated"],
+  },
+  {
+    title: LIVING,
+    items: ["Under beds and closet floors", "Baseboards behind furniture"],
+  },
+  {
+    title: "Detail work",
+    items: [
+      "Baseboards, doors, and door frames in detail",
+      "Buildup on tile grout and fixtures",
+      "Interior window sills and tracks",
+      "Blinds dusted",
+      "Vents and air returns",
+      "Behind and beneath movable furniture",
+    ],
+  },
+];
+
+/** A move in and out is a deep clean plus everything an empty unit needs. */
+const MOVE_OUT_ADDS: ChecklistSection[] = [
+  {
+    title: "Empty unit",
+    items: [
+      "Inside oven",
+      "Inside refrigerator",
+      "Cabinet and drawer interiors",
+      "Interior windows, sills, and tracks",
+      "Inside closets and shelving",
+      "Laundry room, including behind machines where accessible",
+      "Garage door interior and entry areas",
+    ],
+  },
+];
+
+/** Fold one set of sections into another, matching on the room name. */
+function merge(base: ChecklistSection[], extra: ChecklistSection[]): ChecklistSection[] {
+  const out = base.map((s) => ({ title: s.title, items: [...s.items] }));
+  for (const section of extra) {
+    const existing = out.find((s) => s.title === section.title);
+    if (existing) existing.items.push(...section.items);
+    else out.push({ title: section.title, items: [...section.items] });
+  }
+  return out;
+}
 
 /**
- * The whole list for a visit, including anything the service covers for free.
+ * Add-ons this service covers for free that the list above does not already
+ * name, so a cleaner is told to do the thing the customer was told they get.
  *
- * The included add-ons are pulled in from the pricing catalog rather than
- * typed out again. They are already free on a deep clean and on a move in and
- * out, and a cleaner who is not told to do the fridge will not do the fridge,
- * which is how a customer ends up paying for something nobody did.
+ * Filtered rather than appended blindly. A move in and out already spells out
+ * the oven, the fridge, the cabinets and the windows, and a checklist that
+ * lists the fridge twice is a checklist people stop reading properly.
  */
-export function checklistFor(serviceType: ServiceType): ChecklistSection[] {
-  const covered = SERVICE_INCLUDES[serviceType]
-    .map((code) => addOnByCode(code)?.name)
-    .filter((name): name is string => Boolean(name));
+function uncoveredIncludedAddOns(
+  serviceType: ServiceType,
+  sections: ChecklistSection[],
+): string[] {
+  const written = sections
+    .flatMap((s) => s.items)
+    .join(" ")
+    .toLowerCase();
 
-  return [
-    ...BASE,
-    ...EXTRA[serviceType],
-    ...(covered.length
-      ? [{ title: "Included with this service, at no charge", items: covered }]
-      : []),
-  ];
+  return SERVICE_INCLUDES[serviceType]
+    .map((code) => addOnByCode(code)?.name)
+    .filter((name): name is string => Boolean(name))
+    .filter((name) => {
+      // "Inside refrigerator" is covered by "Inside refrigerator"; "Interior
+      // windows" by "Interior windows, sills, and tracks". Matched on the
+      // distinctive noun rather than the whole label.
+      const key = name.toLowerCase().replace(/^inside |^interior /, "").split(",")[0];
+      return !written.includes(key);
+    });
+}
+
+export function checklistFor(serviceType: ServiceType): ChecklistSection[] {
+  const sections =
+    serviceType === "standard"
+      ? STANDARD.map((s) => ({ title: s.title, items: [...s.items] }))
+      : serviceType === "deep"
+        ? merge(STANDARD, DEEP_ADDS)
+        : merge(merge(STANDARD, DEEP_ADDS), MOVE_OUT_ADDS);
+
+  const extra = uncoveredIncludedAddOns(serviceType, sections);
+  return extra.length
+    ? [...sections, { title: "Included with this service, at no charge", items: extra }]
+    : sections;
 }
 
 /** How many things are on it, for the assignment email. */
