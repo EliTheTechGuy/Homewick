@@ -339,15 +339,21 @@ export async function markCleanerPaid(form: FormData): Promise<Result> {
 
   const reference = field(form, "reference").slice(0, 200) || null;
 
-  const settled = await query<{ id: string }>(
-    `update visits
-        set cleaner_paid_at = now(),
-            cleaner_payment_ref = $3
-      where id = any($1::uuid[])
-        and assigned_cleaner_id = $2
-        and cleaner_paid_at is null
-        and cleaner_pay_cents is not null
-      returning id`,
+  // Settled per person on the job, not per job. Two cleaners on one house are
+  // owed different amounts and are paid separately, and this used to write a
+  // single flag on the visit that had no room for the second one.
+  //
+  // It also used to write to a different table than the page reads from, so
+  // the page showed nothing and the button settled something invisible.
+  const settled = await query<{ visit_id: string }>(
+    `update visit_cleaners vc
+        set paid_at = now(),
+            payment_ref = $3
+      where vc.visit_id = any($1::uuid[])
+        and vc.cleaner_id = $2
+        and vc.paid_at is null
+        and vc.pay_cents is not null
+      returning vc.visit_id`,
     [ids.data, cleanerId.data, reference],
   );
 
