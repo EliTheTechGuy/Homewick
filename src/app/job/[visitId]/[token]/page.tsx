@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import { queryOne } from "@/lib/db";
 import { TIMEZONE, formatLong } from "@/lib/dates";
 import { visitTokenValid } from "@/lib/visit-links";
-import { serviceTypeLabel, unitSizeLabel, type ServiceType, type UnitSize } from "@/lib/pricing";
+import { propertyLabel, serviceTypeLabel, type ServiceType, type UnitSize } from "@/lib/pricing";
 import { JobAccess } from "@/components/JobAccess";
+import { JobChecklist } from "@/components/JobChecklist";
+import { checklistFor } from "@/lib/checklists";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +27,11 @@ export const metadata: Metadata = {
  */
 export default async function JobPage({
   params,
+  searchParams,
 }: PageProps<"/job/[visitId]/[token]">) {
   const { visitId, token } = await params;
+  // Preview only, and it goes when the shape is chosen.
+  const { tick } = (await searchParams) as { tick?: string };
   if (!visitTokenValid(visitId, token)) notFound();
 
   const visit = await queryOne<{
@@ -34,7 +39,9 @@ export default async function JobPage({
     on_date: string;
     at_time: string;
     service_type: ServiceType;
-    unit_size: UnitSize;
+    unit_size: UnitSize | null;
+    bedrooms: number | null;
+    bathrooms: string | null;
     has_pets: boolean;
     line1: string;
     line2: string | null;
@@ -51,7 +58,7 @@ export default async function JobPage({
     `select v.status::text as status,
             (v.scheduled_for at time zone $2)::date::text as on_date,
             to_char(v.scheduled_for at time zone $2, 'HH12:MI AM') as at_time,
-            v.service_type, p.unit_size, p.has_pets,
+            v.service_type, p.unit_size, p.bedrooms, p.bathrooms, p.has_pets,
             p.line1, p.line2, p.city, p.postal_code,
             c.first_name as customer_first, c.last_name as customer_last,
             c.phone as customer_phone, v.customer_instructions,
@@ -95,7 +102,16 @@ export default async function JobPage({
 
       <dl className="mt-8 divide-y divide-hairline border-y border-hairline">
         <Row label="Address" value={address} />
-        <Row label="Apartment" value={unitSizeLabel(visit.unit_size)} />
+        {/* A house has no bracket, and "Apartment:" with nothing after it
+            is what a cleaner heading to a four bedroom house was reading. */}
+        <Row
+          label="Property"
+          value={propertyLabel({
+            unitSize: visit.unit_size,
+            bedrooms: visit.bedrooms,
+            bathrooms: visit.bathrooms,
+          })}
+        />
         <Row label="Job" value={serviceTypeLabel(visit.service_type)} />
         <Row
           label="Customer"
@@ -107,6 +123,16 @@ export default async function JobPage({
           <Row label="Also included" value={visit.add_ons.join(", ")} />
         )}
       </dl>
+
+      {/* Preview only: ?tick=1 shows the version the cleaner marks off, so
+          both shapes can be looked at before one is chosen. The loser gets
+          deleted along with this line. */}
+      {!cancelled && (
+        <JobChecklist
+          sections={checklistFor(visit.service_type)}
+          tickable={tick === "1"}
+        />
+      )}
 
       {visit.customer_instructions && (
         <div className="mt-6 rounded-xl bg-panel p-4">
