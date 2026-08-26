@@ -42,6 +42,12 @@ export type Metrics = {
     overdue: number;
   };
   owed: { cleaners: number; totalCents: number };
+  /**
+   * Work that has been done and not paid for, from a job agreed before the
+   * money arrived. The one number that has nowhere else to surface: the
+   * customer is gone, the cleaner has been paid, and nothing chases it.
+   */
+  unpaid: { jobs: number; totalCents: number };
 };
 
 /**
@@ -178,6 +184,22 @@ export async function loadMetrics(): Promise<Metrics> {
       where vc.paid_at is null and v.status = 'completed'`,
   );
 
+  // Cleaned, and still not paid for. Only pay-later jobs can end up here: an
+  // ordinary booking is paid before it is ever scheduled. A membership visit
+  // counts while its subscription has never reached Stripe, which is what
+  // being unpaid means for one.
+  const unpaid = await queryOne<{ jobs: number; total_cents: number }>(
+    `select count(*)::int as jobs, coalesce(sum(${VISIT_VALUE}), 0)::int as total_cents
+       from visits v
+       left join subscriptions s on s.id = v.subscription_id
+      where v.status = 'completed'
+        and v.payment_terms = 'later'
+        and case when v.subscription_id is null
+                 then v.stripe_payment_intent_id is null
+                 else s.stripe_subscription_id is null
+            end`,
+  );
+
   return {
     revenue: {
       thisMonthCents: money?.this_month ?? 0,
@@ -204,6 +226,7 @@ export async function loadMetrics(): Promise<Metrics> {
       overdue: work?.overdue ?? 0,
     },
     owed: { cleaners: owed?.cleaners ?? 0, totalCents: owed?.total_cents ?? 0 },
+    unpaid: { jobs: unpaid?.jobs ?? 0, totalCents: unpaid?.total_cents ?? 0 },
   };
 }
 

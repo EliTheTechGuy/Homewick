@@ -271,6 +271,8 @@ export async function changeMembershipSize(newSize: unknown): Promise<Result> {
         started_on: sub.started_on,
         billing_day: sub.billing_day,
         interval_days: sub.interval_days,
+        // Only used to work out period boundaries, which do not depend on it.
+        payment_terms: "on_booking" as const,
         pending_amount_cents: null,
         pending_amount_effective_on: null,
         ends_on: null,

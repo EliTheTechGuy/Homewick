@@ -3,7 +3,7 @@ import { query, isDatabaseConfigured } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-page";
 import { TIMEZONE, formatLong, today } from "@/lib/dates";
 import { formatCents } from "@/lib/money";
-import { unitSizeLabel, type UnitSize } from "@/lib/pricing";
+import { propertyLabel, type UnitSize } from "@/lib/pricing";
 import { RevealAccess } from "@/components/RevealAccess";
 import { MarkComplete } from "@/components/MarkComplete";
 import { MarkSkipped } from "@/components/MarkSkipped";
@@ -23,7 +23,7 @@ type VisitRow = {
   status: string;
   origin: string;
   service_type: string;
-  unit_size: UnitSize;
+  unit_size: UnitSize | null;
   has_pets: boolean;
   line1: string;
   line2: string | null;
@@ -40,6 +40,9 @@ type VisitRow = {
   cleaner_name: string | null;
   assigned_cleaner_id: string | null;
   moved_from: string | null;
+  /** Agreed before it was paid for, and still not paid for. */
+  awaiting_payment: boolean;
+  subscription_id: string | null;
 };
 
 export default async function AdminTodayPage({
@@ -64,7 +67,16 @@ export default async function AdminTodayPage({
             p.unit_size, p.has_pets, p.line1, p.line2, p.city, p.postal_code,
             c.first_name, c.last_name, c.phone,
             cl.first_name || ' ' || cl.last_name as cleaner_name,
-            v.assigned_cleaner_id,
+            v.assigned_cleaner_id, v.subscription_id,
+            -- On the board because it was agreed, not because it was paid for.
+            -- A one-off is paid once Stripe has a payment intent against it; a
+            -- membership visit is paid once its subscription reached Stripe.
+            (v.payment_terms = 'later'
+               and case when v.subscription_id is null
+                        then v.stripe_payment_intent_id is null
+                        else (select s.stripe_subscription_id is null
+                                from subscriptions s where s.id = v.subscription_id)
+                   end) as awaiting_payment,
             (v.rescheduled_from at time zone $2)::date::text as moved_from,
             (select json_agg(json_build_object('name', a.name,
                                                'is_free_perk', va.is_free_perk)
@@ -195,11 +207,15 @@ export default async function AdminTodayPage({
               </div>
 
               <div className="mt-5 flex flex-wrap gap-2">
-                <Tag>{unitSizeLabel(visit.unit_size)}</Tag>
+                <Tag>{propertyLabel({ unitSize: visit.unit_size })}</Tag>
                 <Tag>{serviceLabel(visit.service_type)}</Tag>
                 <Tag>{visit.origin === "membership" ? "Membership" : "One-time"}</Tag>
                 {/* The surcharge is one-time and usually zero by now, so the
                     cleaner just needs to know there are animals in the home. */}
+                {/* Agreed on the phone and not paid for yet. Amber rather than
+                    hidden: this is a cleaner going out on trust, and it is the
+                    one thing about this job you must not forget. */}
+                {visit.awaiting_payment && <Tag tone="warn">Unpaid</Tag>}
                 {visit.moved_from && <Tag tone="warn">Moved from {formatLong(visit.moved_from)}</Tag>}
                 {visit.has_pets && <Tag tone="warn">Pets</Tag>}
                 <Tag tone={visit.status === "completed" ? "good" : "plain"}>

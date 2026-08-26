@@ -255,6 +255,7 @@ export async function submitBooking(raw: unknown): Promise<BookingResult> {
           // Public bookings are always the monthly membership. Custom
           // cadences are entered in admin.
           interval_days: null,
+          payment_terms: "on_booking" as const,
           pet_surcharge_cents: 0,
           preferred_weekday: input.preferredWeekday ?? null,
           preferred_weekday_second: null,

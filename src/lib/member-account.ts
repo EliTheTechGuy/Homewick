@@ -303,6 +303,8 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
         property_id: "",
         status: "active",
         interval_days: sub.interval_days,
+        // Boundary arithmetic only.
+        payment_terms: "on_booking" as const,
         monthly_amount_cents: sub.monthly_amount_cents,
         visits_per_period: sub.visits_per_period,
         pet_surcharge_cents: sub.pet_surcharge_cents,
