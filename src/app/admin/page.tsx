@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { query, isDatabaseConfigured } from "@/lib/db";
 import { guardAdminPage } from "@/lib/admin-page";
 import { TIMEZONE, formatLong, today } from "@/lib/dates";
@@ -8,7 +9,7 @@ import { RevealAccess } from "@/components/RevealAccess";
 import { MarkComplete } from "@/components/MarkComplete";
 import { MarkSkipped } from "@/components/MarkSkipped";
 import { CancelVisitAdmin } from "@/components/admin/CancelVisitAdmin";
-import { AssignCleaner, type CleanerOption } from "@/components/admin/AssignCleaner";
+import { AssignCrew, type CleanerOption } from "@/components/admin/AssignCrew";
 import { MonthCalendar, type DayCount } from "@/components/admin/MonthCalendar";
 import { UpcomingRail, type UpcomingRow } from "@/components/admin/UpcomingRail";
 import { addDays, addMonths, isISODate } from "@/lib/dates";
@@ -39,6 +40,8 @@ type VisitRow = {
   add_ons: { name: string; is_free_perk: boolean }[] | null;
   cleaner_name: string | null;
   assigned_cleaner_id: string | null;
+  property_kind: "apartment" | "house";
+  crew: { cleaner_id: string; is_lead: boolean }[] | null;
   moved_from: string | null;
   /** Agreed before it was paid for, and still not paid for. */
   awaiting_payment: boolean;
@@ -68,6 +71,11 @@ export default async function AdminTodayPage({
             c.first_name, c.last_name, c.phone,
             cl.first_name || ' ' || cl.last_name as cleaner_name,
             v.assigned_cleaner_id, v.subscription_id,
+            p.property_kind::text as property_kind,
+            (select json_agg(json_build_object('cleaner_id', vc.cleaner_id,
+                                               'is_lead', vc.is_lead)
+                             order by vc.is_lead desc)
+               from visit_cleaners vc where vc.visit_id = v.id) as crew,
             -- On the board because it was agreed, not because it was paid for.
             -- A one-off is paid once Stripe has a payment intent against it; a
             -- membership visit is paid once its subscription reached Stripe.
@@ -188,9 +196,16 @@ export default async function AdminTodayPage({
                   <p className="text-sm font-semibold tracking-wide text-accent">
                     {visit.scheduled_at}
                   </p>
+                  {/* The address is the way into the job. Everything about
+                      one cleaning that does not fit on a card lives there. */}
                   <h2 className="mt-1 text-xl font-semibold text-navy">
-                    {visit.line1}
-                    {visit.line2 ? `, ${visit.line2}` : ""}
+                    <Link
+                      href={`/admin/visit/${visit.id}`}
+                      className="hover:text-accent hover:underline"
+                    >
+                      {visit.line1}
+                      {visit.line2 ? `, ${visit.line2}` : ""}
+                    </Link>
                   </h2>
                   <p className="text-muted">
                     {visit.city}, TX {visit.postal_code}
@@ -273,10 +288,14 @@ export default async function AdminTodayPage({
                     </>
                   )}
                 </div>
-                <AssignCleaner
+                <AssignCrew
                   visitId={visit.id}
-                  assignedId={visit.assigned_cleaner_id}
                   cleaners={cleaners}
+                  crew={(visit.crew ?? []).map((c) => ({
+                    cleanerId: c.cleaner_id,
+                    isLead: c.is_lead,
+                  }))}
+                  isHouse={visit.property_kind === "house"}
                 />
               </div>
             </li>
