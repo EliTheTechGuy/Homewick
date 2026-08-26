@@ -336,7 +336,7 @@ async function notifyVisitMoved(moved: {
           .filter(Boolean)
           .join(", "),
         cleanerName: row.cleaner_name,
-        adminUrl: `${site.url}/admin?date=${moved.to}`,
+        adminUrl: `${site.adminUrl}/admin?date=${moved.to}`,
       }),
     });
   } catch (err) {

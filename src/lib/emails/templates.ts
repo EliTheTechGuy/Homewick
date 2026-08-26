@@ -551,7 +551,7 @@ export function newBookingAlertEmail(params: {
     intro: `${params.customerName} has paid and is on the board for ${formatLong(params.onDate)}.`,
     rows,
     body,
-    cta: { label: "Open the day in admin", url: params.adminUrl },
+    cta: { label: "Open the booking", url: params.adminUrl },
     footerNote:
       "You are getting this because you run Homewick. Entry details are never included here; they stay in admin and are only revealed on the day.",
   });
