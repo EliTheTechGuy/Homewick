@@ -10,6 +10,7 @@ import { cleanerAssignmentEmail } from "@/lib/emails/templates";
 import { site } from "@/lib/site";
 import { visitUrl } from "@/lib/visit-links";
 import { propertyLabel, type ServiceType, type UnitSize } from "@/lib/pricing";
+import { checklistLength } from "@/lib/checklists";
 
 type Result = { ok: boolean; message: string };
 
@@ -263,6 +264,7 @@ export async function notifyCleaner(
         addOns: row.add_ons ?? [],
         instructions: row.customer_instructions,
         jobUrl: visitUrl(site.url, visitId),
+        checklistCount: checklistLength(row.service_type),
         hasEntryDetails: row.has_entry_details,
       }),
     });

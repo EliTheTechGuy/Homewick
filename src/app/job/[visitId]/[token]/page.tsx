@@ -27,11 +27,8 @@ export const metadata: Metadata = {
  */
 export default async function JobPage({
   params,
-  searchParams,
 }: PageProps<"/job/[visitId]/[token]">) {
   const { visitId, token } = await params;
-  // Preview only, and it goes when the shape is chosen.
-  const { tick } = (await searchParams) as { tick?: string };
   if (!visitTokenValid(visitId, token)) notFound();
 
   const visit = await queryOne<{
@@ -124,15 +121,7 @@ export default async function JobPage({
         )}
       </dl>
 
-      {/* Preview only: ?tick=1 shows the version the cleaner marks off, so
-          both shapes can be looked at before one is chosen. The loser gets
-          deleted along with this line. */}
-      {!cancelled && (
-        <JobChecklist
-          sections={checklistFor(visit.service_type)}
-          tickable={tick === "1"}
-        />
-      )}
+      {!cancelled && <JobChecklist sections={checklistFor(visit.service_type)} />}
 
       {visit.customer_instructions && (
         <div className="mt-6 rounded-xl bg-panel p-4">

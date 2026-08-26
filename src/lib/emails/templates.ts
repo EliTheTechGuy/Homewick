@@ -597,6 +597,8 @@ export function cleanerAssignmentEmail(params: {
   instructions: string | null;
   jobUrl: string;
   hasEntryDetails: boolean;
+  /** How many things this service covers, so they know the size before they go. */
+  checklistCount: number;
 }): Composed {
   const moved = params.reason === "moved";
 
@@ -611,6 +613,15 @@ export function cleanerAssignmentEmail(params: {
   if (params.hasPets) rows.push({ label: "Pets", value: "Yes, at this address" });
   if (params.addOns.length > 0) {
     rows.push({ label: "Also included", value: params.addOns.join(", ") });
+  }
+  // The count, not the list. Forty-four lines in an email is a wall nobody
+  // reads, and the list belongs on the page they have open while working
+  // rather than in a message they read once on the way there.
+  if (params.checklistCount > 0) {
+    rows.push({
+      label: "Checklist",
+      value: `${params.checklistCount} things, on the job page`,
+    });
   }
 
   const body: string[] = [];

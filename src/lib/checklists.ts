@@ -50,7 +50,12 @@ const STANDARD: ChecklistSection[] = [
   {
     title: LIVING,
     items: [
-      "Beds made; linens changed when fresh sets are left out",
+      // Unconditional, because that is what the customer was sold. The
+      // pricing page says "Bed linens changed · Included", the services page
+      // says "included on every clean", and clause 7 of the agreement names
+      // it. A conditional instruction here would be the cleaner being told
+      // something different to what was promised.
+      "Beds made and linens changed",
       "Surfaces dusted, including sills and reachable ledges",
       "Ceiling fans dusted",
       "Light fixtures dusted",
