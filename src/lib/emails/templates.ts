@@ -303,6 +303,59 @@ export function visitCanceledEmail(params: {
 }
 
 /**
+ * A booking agreed on the phone, with the money coming later.
+ *
+ * Somebody who has just spoken to you and put a date in their diary needs to
+ * see that date written down. Until now they got nothing at all: the payment
+ * link was the only thing a manual booking ever sent, so choosing to collect
+ * nearer the day meant choosing to send them silence.
+ *
+ * Deliberately has no payment link in it. This is a confirmation, and putting
+ * a "pay now" button on it would undo the arrangement that was just made with
+ * somebody who asked not to pay up front.
+ */
+export function bookingConfirmedEmail(params: {
+  firstName: string;
+  serviceType: ServiceType;
+  onDate: ISODate;
+  address: string;
+  property: string;
+  amountCents: number;
+  /** Null for a single visit. Otherwise days between cleanings. */
+  intervalDays: number | null;
+  recurring: boolean;
+}): Composed {
+  const price = formatCents(params.amountCents);
+
+  const rows: Row[] = [
+    { label: params.recurring ? "First clean" : "When", value: formatLong(params.onDate) },
+    { label: "Service", value: serviceTypeLabel(params.serviceType) },
+    { label: "Where", value: params.address },
+    { label: "Property", value: params.property },
+    {
+      label: params.recurring ? "Price" : "Total",
+      value: params.recurring ? `${price} ${cadenceLabel(params.intervalDays)}` : price,
+    },
+  ];
+
+  return compose({
+    subject: `Your cleaning on ${formatLong(params.onDate)}`,
+    heading: `You are booked in, ${params.firstName}`,
+    intro: "Here is what we agreed, so you have it in writing.",
+    rows,
+    body: [
+      "Nothing to pay today. We will send you a link when it is time, and the cleaning is in the diary either way.",
+      params.recurring
+        ? "After the first one it runs on its own, on the same rhythm, and you can stop with 14 days' notice whenever you like."
+        : "This is a single visit, so there is nothing recurring and nothing to cancel afterwards.",
+      "We will email you a reminder before the visit. If the date needs to move, get in touch and we will sort it.",
+    ],
+    footerNote:
+      "Your cleaner is told the address, the time, and how to get in, and nothing else about you.",
+  });
+}
+
+/**
  * A booking entered by hand in admin, waiting on the customer's card.
  *
  * Admin used to be handed the raw Stripe URL to copy and forward itself. That

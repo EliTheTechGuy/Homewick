@@ -6,9 +6,9 @@ import { transaction } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin-auth";
 import { encryptSecret } from "@/lib/secrets";
 import { today } from "@/lib/dates";
-import { UNIT_SIZES, type ServiceType, type UnitSize } from "@/lib/pricing";
+import { propertyLabel, UNIT_SIZES, type ServiceType, type UnitSize } from "@/lib/pricing";
 import { sendOnce } from "@/lib/emails/send-once";
-import { paymentLinkEmail } from "@/lib/emails/templates";
+import { bookingConfirmedEmail, paymentLinkEmail } from "@/lib/emails/templates";
 import { generateForSubscription } from "@/lib/membership-lifecycle";
 import { createCheckoutSession } from "./checkout";
 
@@ -275,12 +275,45 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
     // board and can be staffed; the money is collected from their record when
     // he decides to ask for it.
     if (input.paymentTerms === "later") {
+      // Confirmed, not invoiced. Somebody who has just been on the phone and
+      // written a date in their diary needs that date written down by us too.
+      // Sending nothing was the old behaviour and it meant that choosing to
+      // collect nearer the day was choosing to go quiet on a customer who had
+      // just agreed to something.
+      const confirmed = await sendOnce({
+        eventKey: `booking_confirmed:${ref.id}`,
+        kind: "booking_confirmed",
+        to: input.email,
+        customerId: ref.customerId,
+        message: bookingConfirmedEmail({
+          firstName: input.firstName,
+          serviceType: input.serviceType as ServiceType,
+          onDate: input.startsOn,
+          address: [input.line1, input.line2, `${input.city}, TX ${input.postalCode}`]
+            .filter(Boolean)
+            .join(", "),
+          property: propertyLabel({
+            unitSize: input.propertyKind === "house" ? null : (input.unitSize ?? null),
+            bedrooms: input.bedrooms ?? null,
+            bathrooms: input.bathrooms ?? null,
+          }),
+          amountCents: input.amountCents,
+          intervalDays: input.intervalDays ?? null,
+          recurring: input.plan === "recurring",
+        }),
+      }).catch((err) => {
+        console.error(`[admin] booking confirmation failed for ${ref.id}`, err);
+        return { sent: false as const };
+      });
+
       revalidatePath("/admin");
       revalidatePath("/admin/members");
       return {
         ok: true,
-        emailed: false,
-        message: `${input.firstName} is in, ${cadence}. Nothing has been sent yet. Assign a cleaner now, and send the payment link from their record when you are ready.`,
+        emailed: confirmed.sent,
+        message: confirmed.sent
+          ? `${input.firstName} is in, ${cadence}, and has been emailed the details. No payment link yet: send that from the job when you are ready.`
+          : `${input.firstName} is in, ${cadence}, but the confirmation email did not send. They have not heard from us, so tell them the date yourself.`,
       };
     }
 
