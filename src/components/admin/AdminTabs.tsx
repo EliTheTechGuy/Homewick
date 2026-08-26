@@ -11,6 +11,7 @@ import { AdminSignOut } from "./AdminSignOut";
  */
 const TABS = [
   { href: "/admin", label: "Schedule" },
+  { href: "/admin/bookings", label: "Bookings" },
   { href: "/admin/new", label: "New booking" },
   { href: "/admin/members", label: "Members" },
   { href: "/admin/enquiries", label: "Quotes" },
