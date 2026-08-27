@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { transaction } from "@/lib/db";
+import { query, transaction } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin-auth";
 import { encryptSecret } from "@/lib/secrets";
 import { DEFAULT_VISIT_TIME, TIMEZONE, addDays, today } from "@/lib/dates";
@@ -10,6 +10,10 @@ import { propertyLabel, UNIT_SIZES, type ServiceType, type UnitSize } from "@/li
 import { sendOnce } from "@/lib/emails/send-once";
 import { bookingConfirmedEmail, paymentLinkEmail } from "@/lib/emails/templates";
 import { generateForSubscription } from "@/lib/membership-lifecycle";
+import {
+  REMIND_ON_BOOKING_DAYS,
+  sendVisitReminder,
+} from "@/lib/emails/visit-reminder";
 import { createCheckoutSession } from "./checkout";
 
 /**
@@ -97,6 +101,34 @@ export type ManualBookingInput = z.infer<typeof schema>;
 
 function money(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+/**
+ * Remind the customer now if the job is close enough that waiting would be
+ * too late.
+ *
+ * A single visit is itself; a recurring booking's first cleaning is the one
+ * that might be tomorrow. Never allowed to fail the booking: the record is
+ * saved, and a missing reminder is a phone call rather than a lost customer.
+ */
+async function remindIfImminent(ref: string): Promise<void> {
+  const cutoff = addDays(today(), REMIND_ON_BOOKING_DAYS);
+
+  const soon = await query<{ id: string }>(
+    `select v.id
+       from visits v
+      where (v.id = $1 or v.subscription_id = $1)
+        and v.status in ('scheduled', 'assigned')
+        and (v.scheduled_for at time zone $3)::date <= $2::date
+      order by v.scheduled_for
+      limit 1`,
+    [ref, cutoff, TIMEZONE],
+  );
+  if (!soon[0]) return;
+
+  await sendVisitReminder(soon[0].id).catch((err) => {
+    console.error(`[email] could not remind for visit ${soon[0].id}`, err);
+  });
 }
 
 export async function createManualBooking(raw: unknown): Promise<Result> {
@@ -320,6 +352,12 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
         console.error(`[admin] booking confirmation failed for ${ref.id}`, err);
         return { sent: false as const };
       });
+
+      // A job agreed this afternoon for tomorrow morning would otherwise wait
+      // for a run that fires at nine, which is when somebody knocks on the
+      // door. The daily job shares the key, so whichever gets there first
+      // wins and the other does nothing.
+      await remindIfImminent(ref.id);
 
       revalidatePath("/admin");
       revalidatePath("/admin/members");

@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { formatLong } from "@/lib/dates";
 import { formatCents } from "@/lib/money";
 import { AssignCrew, type CleanerOption } from "./AssignCrew";
 import { SendPaymentLink } from "./SendPaymentLink";
+import { SendConfirmation } from "./SendConfirmation";
 import { CancelVisitAdmin } from "./CancelVisitAdmin";
 import { MarkComplete } from "@/components/MarkComplete";
 import { MarkSkipped } from "@/components/MarkSkipped";
@@ -166,6 +166,7 @@ export function BookingRow({
           )}
 
           <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-hairline pt-4">
+            {!cancelled && <SendConfirmation visitId={booking.id} />}
             {booking.awaitingPayment && (
               <SendPaymentLink
                 kind={booking.subscriptionId ? "membership" : "one_time"}
@@ -184,12 +185,6 @@ export function BookingRow({
             {!cancelled && workable && booking.origin === "one_off" && (
               <CancelVisitAdmin visitId={booking.id} />
             )}
-            <Link
-              href={`/admin/visit/${booking.id}`}
-              className="text-sm font-medium text-accent hover:underline"
-            >
-              Open on its own
-            </Link>
           </div>
         </div>
       )}

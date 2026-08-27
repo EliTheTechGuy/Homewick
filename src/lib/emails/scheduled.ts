@@ -6,11 +6,11 @@ import { site } from "../site";
 import { unsubscribeUrl } from "../unsubscribe-links";
 import { sendOnce } from "./send-once";
 import { requestFeedbackForVisit } from "./feedback-request";
+import { sendVisitReminder } from "./visit-reminder";
 import {
   feedbackRequestEmail,
   freeAddOnNudgeEmail,
   membershipEndedEmail,
-  visitReminderEmail,
 } from "./templates";
 import { MEMBERSHIP_FREQUENCIES, MEMBERSHIP_TIERS } from "../pricing";
 
@@ -225,29 +225,9 @@ async function sendFeedbackRequests(): Promise<number> {
 async function sendVisitReminders(from: ISODate): Promise<number> {
   const tomorrow = addDays(from, 1);
 
-  const visits = await query<{
-    visit_id: string;
-    customer_id: string;
-    first_name: string;
-    email: string;
-    on_date: string;
-    line1: string;
-    line2: string | null;
-    city: string;
-    postal_code: string;
-    free_add_on: string | null;
-  }>(
-    `select v.id as visit_id, c.id as customer_id, c.first_name,
-            c.email::text as email,
-            (v.scheduled_for at time zone $2)::date::text as on_date,
-            p.line1, p.line2, p.city, p.postal_code,
-            (select a.name from visit_add_ons va
-               join add_ons a on a.id = va.add_on_id
-              where va.visit_id = v.id and va.is_free_perk
-              limit 1) as free_add_on
+  const visits = await query<{ visit_id: string }>(
+    `select v.id as visit_id
        from visits v
-       join customers c on c.id = v.customer_id
-       join properties p on p.id = v.property_id
       where (v.scheduled_for at time zone $2)::date between $1::date and $3::date
         and v.status in ('scheduled', 'assigned')`,
     [from, TIMEZONE, tomorrow],
@@ -255,32 +235,10 @@ async function sendVisitReminders(from: ISODate): Promise<number> {
 
   let sent = 0;
   for (const visit of visits) {
-    // Keyed on the visit AND the day it currently falls on, so the job can run
-    // again without sending twice, while a cleaning that has been moved still
-    // earns a reminder for its new day.
-    //
-    // Keying on the visit alone meant that a member who moved a cleaning after
-    // its reminder had already gone out received a reminder for a day when
-    // nothing happened, and nothing at all for the day somebody turned up.
-    const result = await sendOnce({
-      eventKey: `visit:${visit.visit_id}:${visit.on_date}`,
-      kind: "visit_reminder",
-      to: visit.email,
-      customerId: visit.customer_id,
-      message: visitReminderEmail({
-        firstName: visit.first_name,
-        onDate: visit.on_date,
-        when: visit.on_date === from ? "today" : "tomorrow",
-        address: [visit.line1, visit.line2, `${visit.city}, TX ${visit.postal_code}`]
-          .filter(Boolean)
-          .join(", "),
-        freeAddOnName: visit.free_add_on,
-      }),
-    }).catch((err) => {
+    const result = await sendVisitReminder(visit.visit_id, from).catch((err: unknown) => {
       console.error(`[email] reminder failed for visit ${visit.visit_id}`, err);
       return { sent: false as const };
     });
-
     if (result.sent) sent++;
   }
 
