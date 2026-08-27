@@ -5,7 +5,6 @@ import { z } from "zod";
 import { transaction } from "@/lib/db";
 import { currentMember } from "@/lib/member-auth";
 import {
-  DEFAULT_VISIT_TIME,
   TIMEZONE,
   addDays,
   formatLong,
@@ -108,11 +107,15 @@ async function realignFuturePeriods(
     );
     if (current[0]?.on_date === target) continue;
 
+    // The day moves, the time does not. Rewriting it to the default meant a
+    // ten o'clock customer quietly became a nine o'clock one the first time
+    // anything was rescheduled, and nobody would be told.
     await client.query(
       `update visits
-          set scheduled_for = (($2::date + $3::time) at time zone $4)
+          set scheduled_for =
+                (($2::date + (scheduled_for at time zone $3)::time) at time zone $3)
         where id = $1`,
-      [visits[0].id, target, DEFAULT_VISIT_TIME, TIMEZONE],
+      [visits[0].id, target, TIMEZONE],
     );
   }
 }
@@ -222,9 +225,10 @@ export async function rescheduleVisit(
         `update visits
             set rescheduled_from = scheduled_for,
                 rescheduled_at = now(),
-                scheduled_for = (($2::date + $3::time) at time zone $4)
+                scheduled_for =
+                  (($2::date + (scheduled_for at time zone $3)::time) at time zone $3)
           where id = $1`,
-        [visit.id, date.data, DEFAULT_VISIT_TIME, TIMEZONE],
+        [visit.id, date.data, TIMEZONE],
       );
 
       // Remember the weekday for this slot, then move the same slot in every

@@ -36,6 +36,7 @@ function sub(overrides: Partial<SubscriptionRow> = {}): SubscriptionRow {
     pet_surcharge_cents: 0,
     interval_days: null,
     payment_terms: "on_booking",
+    visit_time: "09:00",
     preferred_weekday: 4, // Thursday
     preferred_weekday_second: null,
     started_on: "2026-01-15",

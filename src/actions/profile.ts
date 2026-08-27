@@ -6,7 +6,7 @@ import { transaction, query } from "@/lib/db";
 import { currentMember } from "@/lib/member-auth";
 import { encryptSecret } from "@/lib/secrets";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
-import { formatLong, today, type ISODate } from "@/lib/dates";
+import { DEFAULT_VISIT_TIME, formatLong, today, type ISODate } from "@/lib/dates";
 import { nextPeriod, periodContaining } from "@/lib/membership-lifecycle";
 import {
   UNIT_SIZES,
@@ -273,6 +273,7 @@ export async function changeMembershipSize(newSize: unknown): Promise<Result> {
         interval_days: sub.interval_days,
         // Only used to work out period boundaries, which do not depend on it.
         payment_terms: "on_booking" as const,
+        visit_time: DEFAULT_VISIT_TIME,
         pending_amount_cents: null,
         pending_amount_effective_on: null,
         ends_on: null,

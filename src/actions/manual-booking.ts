@@ -5,7 +5,7 @@ import { z } from "zod";
 import { query, transaction } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin-auth";
 import { encryptSecret } from "@/lib/secrets";
-import { TIMEZONE, addDays, today } from "@/lib/dates";
+import { DEFAULT_VISIT_TIME, TIMEZONE, addDays, today } from "@/lib/dates";
 import { propertyLabel, UNIT_SIZES, type ServiceType, type UnitSize } from "@/lib/pricing";
 import { sendOnce } from "@/lib/emails/send-once";
 import { bookingConfirmedEmail, paymentLinkEmail } from "@/lib/emails/templates";
@@ -68,6 +68,18 @@ const schema = z.object({
   plan: z.enum(["single", "recurring"]),
   serviceType: z.enum(["standard", "deep", "move_out"]),
   startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a start date"),
+  /**
+   * When the cleaning starts, local time.
+   *
+   * Asked for rather than assumed. Every visit used to be nine in the morning
+   * because nothing ever asked, so a time agreed on the phone was written
+   * into the notes instead, and the cleaner's job page then showed nine at
+   * the top and something else underneath.
+   */
+  startsAt: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/, "Pick a time")
+    .default(DEFAULT_VISIT_TIME),
   amountCents: z.number().int().min(100, "Enter an amount").max(500000),
 
   /** Recurring only. Whole days, so every three weeks is simply 21. */
@@ -202,7 +214,7 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
               base_amount_cents, pet_surcharge_cents, addons_amount_cents,
               customer_instructions, payment_terms)
            values ($1, $2, 'one_off', $3, $7::visit_state,
-                   ($4::date + time '09:00') at time zone 'America/Chicago',
+                   ($4::date + $9::time) at time zone 'America/Chicago',
                    $5, 0, 0, $6, $8::payment_terms)
            returning id`,
           [
@@ -218,6 +230,7 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
             // checkout never reaches one.
             input.paymentTerms === "later" ? "scheduled" : "pending_payment",
             input.paymentTerms,
+            input.startsAt,
           ],
         );
         return { kind: "one_time" as const, id: rows[0].id, customerId };
@@ -233,9 +246,9 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
         `insert into subscriptions
            (customer_id, property_id, unit_size, status, monthly_amount_cents,
             visits_per_period, pet_surcharge_cents, started_on, billing_day,
-            interval_days, created_by, payment_terms)
+            interval_days, created_by, payment_terms, visit_time)
          values ($1, $2, $3, 'pending_payment', $4, $5, 0, $6, $7, $8, $9,
-                 $10::payment_terms)
+                 $10::payment_terms, $11::time)
          returning id`,
         [
           customerId,
@@ -248,6 +261,7 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
           input.intervalDays,
           admin.actor,
           input.paymentTerms,
+          input.startsAt,
         ],
       );
       // A pay-later booking has to be a real job now, not when the money
@@ -287,6 +301,7 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
           billing_day: billingDay,
           interval_days: input.intervalDays ?? null,
           payment_terms: input.paymentTerms,
+          visit_time: input.startsAt,
           pending_amount_cents: null,
           pending_amount_effective_on: null,
           ends_on: null,

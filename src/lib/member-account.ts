@@ -1,5 +1,5 @@
 import { query, queryOne } from "./db";
-import { TIMEZONE, today } from "./dates";
+import { DEFAULT_VISIT_TIME, TIMEZONE, today } from "./dates";
 import { subscriptionIncludesFreeAddOn, type UnitSize } from "./pricing";
 import { cancellationEndDate } from "./membership-lifecycle";
 import { cancellationFor, type CancellationTier } from "./cancellation";
@@ -305,6 +305,7 @@ export async function memberOverview(customerId: string): Promise<MemberOverview
         interval_days: sub.interval_days,
         // Boundary arithmetic only.
         payment_terms: "on_booking" as const,
+        visit_time: DEFAULT_VISIT_TIME,
         monthly_amount_cents: sub.monthly_amount_cents,
         visits_per_period: sub.visits_per_period,
         pet_surcharge_cents: sub.pet_surcharge_cents,
