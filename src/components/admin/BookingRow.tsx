@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { formatLong } from "@/lib/dates";
 import { formatCents } from "@/lib/money";
 import { AssignCrew, type CleanerOption } from "./AssignCrew";
@@ -184,12 +183,6 @@ export function BookingRow({
             {!cancelled && workable && booking.origin === "one_off" && (
               <CancelVisitAdmin visitId={booking.id} />
             )}
-            <Link
-              href={`/admin/visit/${booking.id}`}
-              className="text-sm font-medium text-accent hover:underline"
-            >
-              Open on its own
-            </Link>
           </div>
         </div>
       )}

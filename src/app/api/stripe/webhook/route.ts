@@ -492,7 +492,10 @@ async function sendOwnerAlert(
         hasPets: row.has_pets,
         addOns: row.add_ons ?? [],
         instructions: row.customer_instructions,
-        adminUrl: `${site.url}/admin?date=${row.on_date}`,
+        // The booking itself, on the admin host. This used to point at the
+        // public host, where /admin is a deliberate 404, so the button in
+        // every one of these opened a dead page.
+        adminUrl: `${site.adminUrl}/admin/bookings?open=${visitId}`,
       }),
     });
   } catch (err) {
