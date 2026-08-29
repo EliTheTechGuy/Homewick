@@ -354,7 +354,7 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
         ok: true,
         emailed: sent.ok,
         message: sent.ok
-          ? `${input.firstName} is in, ${cadence}, and has been asked to save a card. Charge it from the booking on the morning of the clean.`
+          ? `${input.firstName} is in, ${cadence}, and has been asked to add a card. Charge it from the booking on the morning of the clean.`
           : `${input.firstName} is in, ${cadence}, but the card link did not send: ${sent.message} Send it again from the booking.`,
       };
     }
