@@ -93,7 +93,7 @@ export default function TermsPage() {
                 Some bookings are agreed with a card held on file rather than paid up
                 front. Where that applies, you are told the amount before you enter the
                 card, nothing is taken at that time, and the agreed amount is charged on
-                the morning of your cleaning. Saving the card is your authorisation for
+                the morning of your cleaning. Adding the card is your authorisation for
                 that single charge. It is not used for anything else, no further amount
                 is taken without your agreement, and Stripe emails you a receipt as soon
                 as the payment goes through.

@@ -453,7 +453,7 @@ export function ManualBookingForm() {
                       {
                         id: "card_on_file" as const,
                         title: "Card on file, charge on the day",
-                        body: "They save a card now and are not charged. The job goes on the board, and you take the money with a button on the morning of the clean.",
+                        body: "They add a card now and are not charged. The job goes on the board, and you take the money with a button on the morning of the clean.",
                       },
                     ]
                   : []),
@@ -487,7 +487,7 @@ export function ManualBookingForm() {
           </div>
           {paymentTerms === "card_on_file" && (
             <p className="mt-3 text-sm text-muted">
-              They get one email with the cleaning details and a link to save a card.
+              They get one email with the cleaning details and a link to add a card.
               Nothing is charged until you press Charge card on the booking, and the
               email tells them the amount and that it comes out on the morning of the
               clean.
