@@ -32,7 +32,9 @@ function Label({ children, label }: { children: React.ReactNode; label: string }
 
 export function ManualBookingForm() {
   const [plan, setPlan] = useState<"single" | "recurring">("recurring");
-  const [paymentTerms, setPaymentTerms] = useState<"on_booking" | "later">("on_booking");
+  const [paymentTerms, setPaymentTerms] = useState<
+    "on_booking" | "later" | "card_on_file"
+  >("on_booking");
   const [intervalDays, setIntervalDays] = useState(21);
   const [entryMethod, setEntryMethod] = useState("none");
   const [propertyKind, setPropertyKind] = useState<"apartment" | "house">("apartment");
@@ -310,7 +312,15 @@ export function ManualBookingForm() {
             <button
               key={p}
               type="button"
-              onClick={() => setPlan(p)}
+              onClick={() => {
+                setPlan(p);
+                // Card on file is a single-visit choice. Leaving it selected
+                // while the option disappears would submit a booking the
+                // server refuses, with nothing on screen explaining why.
+                if (p === "recurring" && paymentTerms === "card_on_file") {
+                  setPaymentTerms("on_booking");
+                }
+              }}
               className={
                 plan === p
                   ? "rounded-full bg-navy px-4 py-2 text-sm font-semibold text-white"
@@ -435,6 +445,18 @@ export function ManualBookingForm() {
                   title: "I will send it later",
                   body: "The job goes on the board straight away so you can assign cleaners. Send the link from their record when you are ready.",
                 },
+                // Hidden on a repeating booking rather than shown and refused.
+                // A subscription already keeps a card and charges it, so the
+                // choice would be between one thing and the same thing.
+                ...(plan === "single"
+                  ? [
+                      {
+                        id: "card_on_file" as const,
+                        title: "Card on file, charge on the day",
+                        body: "They save a card now and are not charged. The job goes on the board, and you take the money with a button on the morning of the clean.",
+                      },
+                    ]
+                  : []),
               ]
             ).map((o) => (
               <label
@@ -463,6 +485,14 @@ export function ManualBookingForm() {
               </label>
             ))}
           </div>
+          {paymentTerms === "card_on_file" && (
+            <p className="mt-3 text-sm text-muted">
+              They get one email with the cleaning details and a link to save a card.
+              Nothing is charged until you press Charge card on the booking, and the
+              email tells them the amount and that it comes out on the morning of the
+              clean.
+            </p>
+          )}
           {paymentTerms === "later" && (
             <p className="mt-3 text-sm text-muted">
               Nothing is charged and nothing is sent. You are agreeing to do the work

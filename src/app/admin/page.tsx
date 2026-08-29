@@ -77,7 +77,7 @@ export default async function AdminTodayPage({
             -- On the board because it was agreed, not because it was paid for.
             -- A one-off is paid once Stripe has a payment intent against it; a
             -- membership visit is paid once its subscription reached Stripe.
-            (v.payment_terms = 'later'
+            (v.payment_terms <> 'on_booking'
                and case when v.subscription_id is null
                         then v.stripe_payment_intent_id is null
                         else (select s.stripe_subscription_id is null

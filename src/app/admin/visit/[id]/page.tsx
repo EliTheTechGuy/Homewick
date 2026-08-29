@@ -80,7 +80,7 @@ export default async function AdminVisitPage({
               s.monthly_amount_cents / greatest(s.visits_per_period, 1)
             ) as price_cents,
             v.subscription_id, p.id as property_id,
-            (v.payment_terms = 'later'
+            (v.payment_terms <> 'on_booking'
                and case when v.subscription_id is null
                         then v.stripe_payment_intent_id is null
                         else s.stripe_subscription_id is null

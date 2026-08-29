@@ -65,4 +65,4 @@ export const site = {
 export const PRIVACY_VERSION = "2026-08-24";
 
 /** Bumped whenever the service agreement text changes; recorded on acceptance. */
-export const TERMS_VERSION = "2026-08-24";
+export const TERMS_VERSION = "2026-08-27";

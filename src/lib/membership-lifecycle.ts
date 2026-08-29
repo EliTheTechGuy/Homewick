@@ -81,7 +81,7 @@ export type SubscriptionRow = {
    * Stripe says otherwise, which is what keeps an abandoned checkout from
    * putting a cleaner in a car.
    */
-  payment_terms: "on_booking" | "later";
+  payment_terms: "on_booking" | "later" | "card_on_file";
   /** When cleanings start, local time. Every generated visit takes it. */
   visit_time: string;
   pending_amount_cents: number | null;

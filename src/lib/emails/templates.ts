@@ -413,6 +413,55 @@ export function paymentLinkEmail(params: {
 }
 
 /**
+ * Hold a card now, charge it on the day.
+ *
+ * The reassurance is the whole email, so it leads and it repeats. Somebody
+ * asked to type a card for work that has not happened yet is being asked to
+ * trust us, and the ones who ask for this are usually the ones who were let
+ * down last time. The amount and the day it moves are stated plainly rather
+ * than buried in small print, because a surprise on the morning is exactly
+ * the thing that made them cautious in the first place.
+ *
+ * The authorisation to charge later is given here in writing, not only on
+ * Stripe's page. Charging a saved card with nobody present is allowed on the
+ * basis that they agreed to it, and an email they keep is a better record of
+ * that than a checkout screen they saw once.
+ */
+export function saveCardEmail(params: {
+  firstName: string;
+  setupUrl: string;
+  amountCents: number;
+  serviceType: ServiceType;
+  onDate: ISODate;
+  address: string;
+}): Composed {
+  const price = formatCents(params.amountCents);
+
+  const rows: Row[] = [
+    { label: "Service", value: serviceTypeLabel(params.serviceType) },
+    { label: "Your clean", value: formatLong(params.onDate) },
+    { label: "Where", value: params.address },
+    { label: "Total", value: price },
+  ];
+
+  return compose({
+    subject: "Your Homewick clean is booked, no payment today",
+    heading: `You are booked in, ${params.firstName}`,
+    intro:
+      "Your cleaning is on the schedule. Nothing is being charged today.",
+    rows,
+    body: [
+      `All we need is a card on file. You will not be charged when you enter it. We take ${price} on the morning of your clean, and not before.`,
+      "Your date is held either way. Saving the card is what lets us take payment without chasing you on the day.",
+      "The link is good for 24 hours. If it has stopped working by the time you get to it, just ask and we will send a fresh one.",
+    ],
+    cta: { label: "Save your card", url: params.setupUrl },
+    footerNote:
+      "Your card is stored by Stripe, who handle the payment. We never see it, and it is only used for the cleaning above.",
+  });
+}
+
+/**
  * The morning the membership is actually over.
  *
  * The cancellation email goes out the day somebody cancels, and by then the

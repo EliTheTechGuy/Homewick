@@ -123,6 +123,67 @@ async function handle(event: Stripe.Event): Promise<void> {
         if (first) await sendOwnerAlert(event.id, first.id, "membership", session);
       }
 
+      // A card saved rather than a payment made. Nothing moves here, which is
+      // the point: what arrives is permission to charge later, and the job is
+      // to write down where that permission lives.
+      //
+      // The payment method is read off the SetupIntent rather than the
+      // session, because the session only carries a reference to it. Stored on
+      // the customer, not the visit: a card belongs to a person, and somebody
+      // booking a second clean should not be asked to type it again.
+      if (session.metadata?.kind === "card_on_file" && session.metadata.visit_id) {
+        const setupIntentId =
+          typeof session.setup_intent === "string" ? session.setup_intent : null;
+
+        let paymentMethodId: string | null = null;
+        if (setupIntentId) {
+          const setupIntent = await stripe().setupIntents.retrieve(setupIntentId);
+          // Only a succeeded setup leaves a card anybody can charge. A setup
+          // that ends needing the cardholder to do something carries a payment
+          // method that is not attached to the customer, and taking it at face
+          // value writes down a card that does not exist: the operator sees
+          // "Card on file", presses charge on the morning of the clean, and
+          // gets an error about attaching payment methods while somebody waits
+          // at a front door. Verified against Stripe rather than reasoned
+          // about, by confirming a card in that state and watching the charge
+          // fail.
+          if (setupIntent.status === "succeeded") {
+            paymentMethodId =
+              typeof setupIntent.payment_method === "string"
+                ? setupIntent.payment_method
+                : (setupIntent.payment_method?.id ?? null);
+          } else {
+            console.error(
+              `[stripe] setup ${setupIntentId} finished as ${setupIntent.status}, not treating it as a saved card`,
+            );
+          }
+        }
+
+        if (customerId && paymentMethodId) {
+          await query(
+            `update customers
+                set stripe_customer_id = $2,
+                    stripe_payment_method_id = $3,
+                    updated_at = now()
+              where id = (select customer_id from visits where id = $1)`,
+            [session.metadata.visit_id, customerId, paymentMethodId],
+          );
+
+          // Only once there is actually a card to charge. Stamping this on a
+          // setup that came back without a payment method would tell the
+          // operator they can take the money when they cannot.
+          await query(
+            `update visits set card_saved_at = now()
+              where id = $1 and card_saved_at is null`,
+            [session.metadata.visit_id],
+          );
+        } else {
+          console.error(
+            `[stripe] card_on_file setup for visit ${session.metadata.visit_id} finished without a payment method`,
+          );
+        }
+      }
+
       if (session.metadata?.kind === "one_time" && session.metadata.visit_id) {
         const paymentIntent =
           typeof session.payment_intent === "string" ? session.payment_intent : null;
