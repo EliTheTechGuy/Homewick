@@ -1446,6 +1446,77 @@ test("an expiring checkout cancels an abandoned booking and never a staffed one"
   );
 });
 
+test("a card-on-file booking is staffable, unpaid, and survives its link expiring", async () => {
+  const { customerId, propertyId } = await seedCustomer("cardonfile@example.com");
+
+  const made: Record<string, string> = {};
+  for (const terms of ["on_booking", "later", "card_on_file"] as const) {
+    const v = await db.query<{ id: string }>(
+      `insert into visits (customer_id, property_id, origin, service_type, status,
+                           scheduled_for, base_amount_cents, payment_terms)
+       values ($1, $2, 'one_off', 'standard', 'scheduled',
+               '2027-06-10 10:00-05', 19500, $3::payment_terms)
+       returning id`,
+      [customerId, propertyId, terms],
+    );
+    made[terms] = v.rows[0].id;
+  }
+
+  // The exact expression the bookings list ships to decide the Unpaid tag.
+  // Card on file is money we can reach but have not taken, so it has to read
+  // as unpaid: a job showing settled before anybody charged it is how you get
+  // to the end of a week having cleaned a house for nothing.
+  const unpaid = await db.query<{ id: string; awaiting_payment: boolean }>(
+    `select v.id,
+            (v.payment_terms <> 'on_booking'
+               and v.stripe_payment_intent_id is null) as awaiting_payment
+       from visits v where v.id = any($1::uuid[])`,
+    [Object.values(made)],
+  );
+  const awaiting = new Map(unpaid.rows.map((r) => [r.id, r.awaiting_payment]));
+  assert.equal(awaiting.get(made.card_on_file), true, "a saved card is not a payment");
+  assert.equal(awaiting.get(made.later), true);
+  assert.equal(awaiting.get(made.on_booking), false, "an unexpired ordinary booking is not chased");
+
+  // The statement the webhook runs when Stripe reports a session expired.
+  // A card-on-file job has cleaners against it by then, exactly like pay
+  // later, and wiping it because a 24 hour link lapsed would send nobody to a
+  // house that is expecting them.
+  await db.query(
+    `update visits set status = 'canceled'
+      where id = any($1::uuid[]) and status in ('scheduled', 'pending_payment')
+        and payment_terms = 'on_booking'`,
+    [Object.values(made)],
+  );
+
+  const after = await db.query<{ id: string; status: string }>(
+    `select id, status::text as status from visits where id = any($1::uuid[])`,
+    [Object.values(made)],
+  );
+  const status = new Map(after.rows.map((r) => [r.id, r.status]));
+  assert.equal(
+    status.get(made.card_on_file),
+    "scheduled",
+    "a staffed card-on-file job must survive its link expiring",
+  );
+  assert.equal(status.get(made.on_booking), "canceled");
+
+  // And the charge guard only fires once, so two presses of Charge card
+  // cannot record two payments against one job.
+  const first = await db.query(
+    `update visits set stripe_payment_intent_id = $2
+      where id = $1 and stripe_payment_intent_id is null`,
+    [made.card_on_file, "pi_first"],
+  );
+  const second = await db.query(
+    `update visits set stripe_payment_intent_id = $2
+      where id = $1 and stripe_payment_intent_id is null`,
+    [made.card_on_file, "pi_second"],
+  );
+  assert.equal(first.affectedRows ?? first.rowCount, 1);
+  assert.equal(second.affectedRows ?? second.rowCount, 0, "a second charge must not overwrite the first");
+});
+
 test("a manual booking's first clean lands on the date that was agreed", async () => {
   const { customerId, propertyId } = await seedCustomer("agreeddate@example.com");
   const agreed = "2027-05-11";

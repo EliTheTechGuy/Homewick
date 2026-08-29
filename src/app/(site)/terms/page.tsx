@@ -90,6 +90,15 @@ export default function TermsPage() {
                 Stripe and are never received or stored on Homewick&apos;s systems.
               </li>
               <li>
+                Some bookings are agreed with a card held on file rather than paid up
+                front. Where that applies, you are told the amount before you enter the
+                card, nothing is taken at that time, and the agreed amount is charged on
+                the morning of your cleaning. Saving the card is your authorisation for
+                that single charge. It is not used for anything else, no further amount
+                is taken without your agreement, and Stripe emails you a receipt as soon
+                as the payment goes through.
+              </li>
+              <li>
                 A one-time {formatCents(PET_SURCHARGE_CENTS)} surcharge applies when there
                 are pets in the home. It is charged once, on your first booking, and is
                 not repeated on later visits.

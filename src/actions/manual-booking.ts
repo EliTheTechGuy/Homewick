@@ -10,6 +10,7 @@ import { propertyLabel, UNIT_SIZES, type ServiceType, type UnitSize } from "@/li
 import { sendOnce } from "@/lib/emails/send-once";
 import { bookingConfirmedEmail, paymentLinkEmail } from "@/lib/emails/templates";
 import { generateForSubscription } from "@/lib/membership-lifecycle";
+import { sendCardLink } from "./save-card-link";
 import {
   REMIND_ON_BOOKING_DAYS,
   sendVisitReminder,
@@ -93,8 +94,15 @@ const schema = z.object({
    * "later" is for the customer who will not pay up front, usually because
    * somebody took their money and did not turn up. The job is agreed and
    * staffed now, and the link is sent nearer the day from their record.
+   *
+   * "card_on_file" is the middle of those two. She saves a card and is not
+   * charged, and somebody presses a button on the morning of the clean. It is
+   * the answer to being asked to trust a stranger in both directions at once.
+   * Single visits only: a repeating booking that holds a card is a
+   * subscription, and Stripe already runs those without anybody pressing
+   * anything.
    */
-  paymentTerms: z.enum(["on_booking", "later"]).default("on_booking"),
+  paymentTerms: z.enum(["on_booking", "later", "card_on_file"]).default("on_booking"),
 });
 
 export type ManualBookingInput = z.infer<typeof schema>;
@@ -146,6 +154,16 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
   }
   if (input.startsOn < today()) {
     return { ok: false, message: "The start date is in the past." };
+  }
+
+  // A repeating booking that keeps a card is a subscription by another name,
+  // and Stripe already collects those on its own. Offering it here would build
+  // a second, hand-cranked billing system alongside the working one.
+  if (input.paymentTerms === "card_on_file" && input.plan === "recurring") {
+    return {
+      ok: false,
+      message: "Keeping a card on file is for single visits. A repeating booking collects on its own.",
+    };
   }
 
   try {
@@ -228,7 +246,7 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
             // the day still needs a cleaner sent to it, and the admin board
             // deliberately hides anything pending_payment so that an abandoned
             // checkout never reaches one.
-            input.paymentTerms === "later" ? "scheduled" : "pending_payment",
+            input.paymentTerms === "on_booking" ? "pending_payment" : "scheduled",
             input.paymentTerms,
             input.startsAt,
           ],
@@ -317,6 +335,29 @@ export async function createManualBooking(raw: unknown): Promise<Result> {
       input.plan === "recurring"
         ? `every ${input.intervalDays} days at ${money(input.amountCents)}`
         : `one visit at ${money(input.amountCents)}`;
+
+    // One email, not two. The card link already carries the date, the address
+    // and the price, so sending a confirmation alongside it would be the same
+    // booking described twice in the same minute.
+    //
+    // Reusing the button's own action rather than building a second checkout
+    // here, so that the link sent at creation and the link resent a week later
+    // are made the same way and can never drift apart.
+    if (input.paymentTerms === "card_on_file") {
+      const sent = await sendCardLink({ visitId: ref.id });
+
+      await remindIfImminent(ref.id);
+
+      revalidatePath("/admin");
+      revalidatePath("/admin/bookings");
+      return {
+        ok: true,
+        emailed: sent.ok,
+        message: sent.ok
+          ? `${input.firstName} is in, ${cadence}, and has been asked to save a card. Charge it from the booking on the morning of the clean.`
+          : `${input.firstName} is in, ${cadence}, but the card link did not send: ${sent.message} Send it again from the booking.`,
+      };
+    }
 
     // Nothing is sent yet when the link is going out later. The job is on the
     // board and can be staffed; the money is collected from their record when

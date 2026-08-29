@@ -6,6 +6,8 @@ import { formatCents } from "@/lib/money";
 import { AssignCrew, type CleanerOption } from "./AssignCrew";
 import { SendPaymentLink } from "./SendPaymentLink";
 import { SendConfirmation } from "./SendConfirmation";
+import { SendCardLink } from "./SendCardLink";
+import { ChargeCard } from "./ChargeCard";
 import { CancelVisitAdmin } from "./CancelVisitAdmin";
 import { MarkComplete } from "@/components/MarkComplete";
 import { MarkSkipped } from "@/components/MarkSkipped";
@@ -33,6 +35,8 @@ export type BookingRowData = {
   subscriptionId: string | null;
   propertyId: string;
   awaitingPayment: boolean;
+  paymentTerms: string;
+  cardSaved: boolean;
   hasEntryDetails: boolean;
   crew: { cleanerId: string; name: string; isLead: boolean; payCents: number | null }[];
 };
@@ -87,7 +91,16 @@ export function BookingRow({
 
         <span className="flex flex-wrap items-center gap-2">
           {cancelled && <Tag tone="bad">Cancelled</Tag>}
-          {booking.awaitingPayment && <Tag tone="warn">Unpaid</Tag>}
+          {booking.awaitingPayment &&
+            (booking.paymentTerms === "card_on_file" ? (
+              booking.cardSaved ? (
+                <Tag tone="plain">Card on file</Tag>
+              ) : (
+                <Tag tone="warn">Waiting on card</Tag>
+              )
+            ) : (
+              <Tag tone="warn">Unpaid</Tag>
+            ))}
           {needsCleaner && <Tag tone="warn">Needs a cleaner</Tag>}
           {booking.crew.length > 0 && (
             <Tag>
@@ -167,12 +180,27 @@ export function BookingRow({
 
           <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-hairline pt-4">
             {!cancelled && <SendConfirmation visitId={booking.id} />}
-            {booking.awaitingPayment && (
+            {/* Unpaid splits two ways, and which button appears is the
+                whole difference between chasing somebody and being able to
+                take the money yourself. A card-on-file job shows Send card
+                link until there is a card, then Charge card once there is. */}
+            {booking.awaitingPayment && booking.paymentTerms !== "card_on_file" && (
               <SendPaymentLink
                 kind={booking.subscriptionId ? "membership" : "one_time"}
                 id={booking.subscriptionId ?? booking.id}
               />
             )}
+            {booking.awaitingPayment &&
+              booking.paymentTerms === "card_on_file" &&
+              (booking.cardSaved ? (
+                <ChargeCard
+                  visitId={booking.id}
+                  amountCents={booking.priceCents}
+                  customerName={booking.customerName}
+                />
+              ) : (
+                <SendCardLink visitId={booking.id} />
+              ))}
             {!cancelled && booking.hasEntryDetails && (
               <RevealAccess visitId={booking.id} propertyId={booking.propertyId} />
             )}

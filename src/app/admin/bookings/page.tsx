@@ -62,6 +62,8 @@ type Row = {
   price_cents: number;
   subscription_id: string | null;
   awaiting_payment: boolean;
+  payment_terms: string;
+  card_saved: boolean;
   has_entry_details: boolean;
   crew: { cleaner_id: string; name: string; is_lead: boolean; pay_cents: number | null }[] | null;
 };
@@ -94,11 +96,13 @@ export default async function BookingsPage({
               s.monthly_amount_cents / greatest(s.visits_per_period, 1)
             ) as price_cents,
             v.subscription_id,
-            (v.payment_terms = 'later'
+            (v.payment_terms <> 'on_booking'
                and case when v.subscription_id is null
                         then v.stripe_payment_intent_id is null
                         else s.stripe_subscription_id is null
                    end) as awaiting_payment,
+            v.payment_terms::text as payment_terms,
+            (v.card_saved_at is not null) as card_saved,
             exists (select 1 from property_access_secrets pas
                      where pas.property_id = p.id) as has_entry_details,
             (select json_agg(json_build_object(
@@ -126,7 +130,7 @@ export default async function BookingsPage({
             v.scheduled_for >= now() and v.status not in ('canceled', 'completed', 'skipped')
             and not exists (select 1 from visit_cleaners vc where vc.visit_id = v.id)
           when 'unpaid' then
-            v.status <> 'canceled' and v.payment_terms = 'later'
+            v.status <> 'canceled' and v.payment_terms <> 'on_booking'
             and case when v.subscription_id is null
                      then v.stripe_payment_intent_id is null
                      else s.stripe_subscription_id is null end
@@ -183,6 +187,8 @@ export default async function BookingsPage({
     subscriptionId: r.subscription_id,
     propertyId: r.property_id,
     awaitingPayment: r.awaiting_payment,
+    paymentTerms: r.payment_terms,
+    cardSaved: r.card_saved,
     hasEntryDetails: r.has_entry_details,
     crew: (r.crew ?? []).map((c) => ({
       cleanerId: c.cleaner_id,
