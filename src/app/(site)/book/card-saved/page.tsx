@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 /**
- * Where Stripe drops somebody after they save a card.
+ * Where Stripe drops somebody after they add a card.
  *
  * Deliberately says nothing about the booking. The paid confirmation page can
  * print an address because it has a Stripe session id to check against, and
@@ -36,10 +36,10 @@ export default async function CardSavedPage({
       <Section>
         <div className="max-w-2xl">
           <h1 className="text-3xl font-semibold text-navy md:text-4xl">
-            No card saved
+            No card added
           </h1>
           <p className="mt-4 text-lg leading-relaxed text-muted">
-            You closed the page before the card went in, so nothing was saved and
+            You closed the page before the card went in, so nothing was added and
             nothing has been charged.
           </p>
           <p className="mt-4 leading-relaxed text-body">
@@ -63,7 +63,7 @@ export default async function CardSavedPage({
     <Section>
       <div className="max-w-2xl">
         <h1 className="text-3xl font-semibold text-navy md:text-4xl">
-          Your card is saved
+          Your card is added
         </h1>
         <p className="mt-4 text-lg leading-relaxed text-muted">
           Nothing has been charged. Your cleaning is booked and you are all set.

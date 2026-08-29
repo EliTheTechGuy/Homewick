@@ -452,10 +452,10 @@ export function saveCardEmail(params: {
     rows,
     body: [
       `All we need is a card on file. You will not be charged when you enter it. We take ${price} on the morning of your clean, and not before.`,
-      "Your date is held either way. Saving the card is what lets us take payment without chasing you on the day.",
+      "Your date is held either way. Adding the card is what lets us take payment without chasing you on the day.",
       "The link is good for 24 hours. If it has stopped working by the time you get to it, just ask and we will send a fresh one.",
     ],
-    cta: { label: "Save your card", url: params.setupUrl },
+    cta: { label: "Add your card", url: params.setupUrl },
     footerNote:
       "Your card is stored by Stripe, who handle the payment. We never see it, and it is only used for the cleaning above.",
   });
