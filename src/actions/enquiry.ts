@@ -6,6 +6,12 @@ import { query } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
 import { site } from "@/lib/site";
 import { enquiryAlertEmail } from "@/lib/emails/enquiry-alert";
+import {
+  ENQUIRY_LIMIT,
+  ENQUIRY_WINDOW,
+  HONEYPOT_FIELD,
+  isBotSubmission,
+} from "@/lib/enquiry-guard";
 
 /**
  * A request to be quoted for a house.
@@ -34,6 +40,16 @@ const schema = z.object({
 });
 
 export type EnquiryResult = { ok: boolean; message: string };
+
+/**
+ * What a successful submission says, whether or not it was stored.
+ *
+ * Shared with the honeypot path deliberately. Two different success messages
+ * would be a way to tell a dropped submission from a kept one, which is the
+ * one thing a script probing the form is looking for.
+ */
+const SUBMITTED =
+  "We will take a look and come back with a price, usually the same day. Do keep an eye on your spam folder, just in case.";
 
 function optionalNumber(raw: FormDataEntryValue | null): number | undefined {
   const value = typeof raw === "string" ? raw.trim() : "";
@@ -66,6 +82,46 @@ export async function submitEnquiry(form: FormData): Promise<EnquiryResult> {
   const head = await headers();
   const ip = head.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
   const userAgent = head.get("user-agent")?.slice(0, 500) || null;
+
+  // Answered as though it worked. Telling a script it was caught is how a
+  // script learns to stop filling the field, and the only thing on the other
+  // end of a filled honeypot is a script.
+  if (isBotSubmission(form.get(HONEYPOT_FIELD))) {
+    console.warn(`[enquiry] honeypot filled, dropped. ip=${ip ?? "unknown"}`);
+    return { ok: true, message: SUBMITTED };
+  }
+
+  // Counted from the enquiries already stored rather than from a new table.
+  // The address is on every row because it always has been, so the history
+  // needed to enforce this was sitting there before the rule existed.
+  //
+  // Skipped when there is no address to count, which is the honest failure:
+  // one unidentifiable submitter getting through beats every customer behind
+  // a proxy being turned away.
+  if (ip) {
+    try {
+      const recent = await query<{ count: string }>(
+        `select count(*)::text as count from enquiries
+          where ip_address = $1::inet
+            and created_at > now() - interval '${ENQUIRY_WINDOW}'`,
+        [ip],
+      );
+      if (Number(recent[0]?.count ?? 0) >= ENQUIRY_LIMIT) {
+        console.warn(`[enquiry] rate limited. ip=${ip}`);
+        // True from where they are sitting, and useless to anybody probing
+        // for a limit. Somebody who genuinely sent it twice is told we have
+        // it, which is the thing they actually wanted to know.
+        return {
+          ok: true,
+          message: "We already have your request and will come back to you shortly.",
+        };
+      }
+    } catch (err) {
+      // A failed count must not cost a lead. Letting it through is the right
+      // way to be wrong here.
+      console.error("[enquiry] rate check failed, letting it through", err);
+    }
+  }
 
   try {
     await query(
@@ -129,9 +185,5 @@ export async function submitEnquiry(form: FormData): Promise<EnquiryResult> {
   // that a real person reads it and that we might be out on a job, neither of
   // which anybody asked and both of which read as making excuses in advance.
   // The spam line stays because it is the only thing here worth acting on.
-  return {
-    ok: true,
-    message:
-      "We will take a look and come back with a price, usually the same day. Do keep an eye on your spam folder, just in case.",
-  };
+  return { ok: true, message: SUBMITTED };
 }

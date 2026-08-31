@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { submitEnquiry } from "@/actions/enquiry";
+import { HONEYPOT_FIELD } from "@/lib/enquiry-guard";
 
 const field =
   "mt-1.5 w-full rounded-xl border border-hairline bg-white px-4 py-3 text-body";
@@ -83,6 +84,25 @@ export function EnquiryForm() {
           {error}
         </p>
       )}
+
+      {/* Not a real field. A script filling in everything it can find gives
+          itself away here, and the submission is dropped without telling it
+          why. Positioned off screen rather than display:none, because some
+          form fillers skip anything actually hidden.
+
+          aria-hidden and tabIndex keep it away from anybody using a keyboard
+          or a screen reader, and autocomplete="off" stops a password manager
+          filling it and locking a real customer out of the form. */}
+      <div aria-hidden="true" className="absolute left-[-9999px] top-auto h-px w-px overflow-hidden">
+        <label htmlFor={HONEYPOT_FIELD}>Company</label>
+        <input
+          id={HONEYPOT_FIELD}
+          name={HONEYPOT_FIELD}
+          type="text"
+          tabIndex={-1}
+          autoComplete="off"
+        />
+      </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
         <Label label="Your full name">
