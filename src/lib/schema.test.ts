@@ -1446,6 +1446,47 @@ test("an expiring checkout cancels an abandoned booking and never a staffed one"
   );
 });
 
+test("a quote request is rate limited per address, and only within the window", async () => {
+  const ip = "203.0.113.9";
+  const other = "203.0.113.10";
+
+  const insert = (address: string, ageMinutes: number) =>
+    db.query(
+      `insert into enquiries (name, email, phone, has_pets, service_type, ip_address, created_at)
+       values ('Spam', 'spam@example.com', '5550001111', false, 'not_sure', $1::inet,
+               now() - ($2 || ' minutes')::interval)`,
+      [address, String(ageMinutes)],
+    );
+
+  // Two inside the hour, one that has aged out, and one from somebody else.
+  await insert(ip, 5);
+  await insert(ip, 30);
+  await insert(ip, 90);
+  await insert(other, 5);
+
+  // The count the action ships. Rate limiting on data we already store is the
+  // whole point: no new table, and the history predates the rule.
+  const count = async (address: string) =>
+    Number(
+      (
+        await db.query<{ count: string }>(
+          `select count(*)::text as count from enquiries
+            where ip_address = $1::inet
+              and created_at > now() - interval '1 hour'`,
+          [address],
+        )
+      ).rows[0].count,
+    );
+
+  assert.equal(await count(ip), 2, "the 90 minute old one must fall outside the window");
+  assert.equal(await count(other), 1, "one address filling up must not block another");
+
+  // A third inside the hour is what trips it, and a fourth stays tripped.
+  await insert(ip, 1);
+  assert.equal(await count(ip), 3, "three inside the window is the limit");
+  assert.ok((await count(ip)) >= 3, "at the limit the next request is refused");
+});
+
 test("a card-on-file booking is staffable, unpaid, and survives its link expiring", async () => {
   const { customerId, propertyId } = await seedCustomer("cardonfile@example.com");
 
