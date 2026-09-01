@@ -137,10 +137,7 @@ export const MEMBERSHIP_TIERS: Record<MembershipFrequency, MembershipTier> = {
       "Cancel with 14 days' notice",
     ],
     prices: {
-      // Studio lands exactly on the one-time rate, so this tier buys the
-      // booking and billing happening on their own rather than a discount.
-      // The card says so plainly instead of advertising a saving of nothing.
-      studio_1br: { monthlyCents: 11000, perVisitCents: 11000, savesCents: 0 },
+      studio_1br: { monthlyCents: 10500, perVisitCents: 10500, savesCents: 500 },
       "2br_2ba": { monthlyCents: 15000, perVisitCents: 15000, savesCents: 900 },
       "3br_2ba": { monthlyCents: 21000, perVisitCents: 21000, savesCents: 900 },
     },
