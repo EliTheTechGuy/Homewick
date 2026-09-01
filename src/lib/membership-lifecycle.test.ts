@@ -679,8 +679,12 @@ test("no tier is ever priced above what the same cleaning costs one at a time", 
       const oneAtATime = SERVICE_PRICES[size].standard * tier.visitsPerPeriod;
       const price = tier.prices[size];
 
+      // Never more than buying the same cleanings singly. Equal is allowed
+      // and is what the once-a-month studio does deliberately: that tier sells
+      // the booking and billing happening on their own, not a discount. More
+      // expensive is always wrong, because nobody would take it.
       assert.ok(
-        price.monthlyCents < oneAtATime,
+        price.monthlyCents <= oneAtATime,
         `${frequency} ${size} costs more than buying the same cleanings singly`,
       );
       // The advertised saving is the whole of the difference. Stated rather

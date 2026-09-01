@@ -77,7 +77,9 @@ export function MembershipCards({ className = "" }: { className?: string }) {
                     >
                       {discounted
                         ? `Save ${formatCents(price.savesCents)} a month`
-                        : `${formatCents(price.savesCents)} under the one-time rate`}
+                        : price.savesCents > 0
+                          ? `${formatCents(price.savesCents)} under the one-time rate`
+                          : "Same as the one-time rate, booked for you"}
                     </p>
                     {/* mt-auto keeps the buttons on a line across all three
                         cards, even though one carries an extra badge. */}
