@@ -138,8 +138,8 @@ export const MEMBERSHIP_TIERS: Record<MembershipFrequency, MembershipTier> = {
     ],
     prices: {
       studio_1br: { monthlyCents: 10500, perVisitCents: 10500, savesCents: 500 },
-      "2br_2ba": { monthlyCents: 15200, perVisitCents: 15200, savesCents: 700 },
-      "3br_2ba": { monthlyCents: 20900, perVisitCents: 20900, savesCents: 1000 },
+      "2br_2ba": { monthlyCents: 15000, perVisitCents: 15000, savesCents: 900 },
+      "3br_2ba": { monthlyCents: 21000, perVisitCents: 21000, savesCents: 900 },
     },
   },
 };
